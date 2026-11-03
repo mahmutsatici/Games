@@ -26,7 +26,7 @@ export function makeLevel(world: number, index: number, endless = false, seed?: 
     world, index, endless, seed: seed ?? (n * 7919 + 13),
     length: endless ? 1e9 : Math.round(150 + n * 24 + world * 20),
     crates: endless ? 6 : Math.min(8, 4 + Math.floor(n / 6)),
-    rough: 0.25 + d * 0.9,
+    rough: 0.2 + d * 0.65,
     slime, meteor, ufo,
     rocks: 0.2 + d * 0.5, ramps: lvl >= 3 || world > 0 ? 0.3 + d * 0.4 : 0,
     crateValue: 8,
@@ -49,12 +49,12 @@ export function makeTerrain(L: LevelDef): Terrain {
   if (L.ramps > 0) {
     const count = L.endless ? 400 : Math.floor(L.length / 70);
     let x = 60;
-    for (let i = 0; i < count; i++) { x += 45 + r() * 70 / Math.max(0.4, L.ramps); ramps.push({ x, len: 5 + r() * 3, rise: 1.4 + r() * 1.2 * L.rough }); }
+    for (let i = 0; i < count; i++) { x += 45 + r() * 70 / Math.max(0.4, L.ramps); ramps.push({ x, len: 6 + r() * 3, rise: 1.0 + r() * 1.0 * L.rough }); }
   }
   const baseH = (x: number) => {
     const ramp = Math.min(1, Math.max(0, (x - FLAT_START) / 40));
     const a = L.rough * ramp;
-    return a * (vnoise(x * 0.045, s) * 6.5 + vnoise(x * 0.11, s + 77) * 2.2 + vnoise(x * 0.31, s + 9) * 0.55 * L.rough) ;
+    return a * (vnoise(x * 0.038, s) * 5.5 + vnoise(x * 0.11, s + 77) * 1.8 + vnoise(x * 0.31, s + 9) * 0.55 * L.rough) ;
   };
   return {
     ramps,

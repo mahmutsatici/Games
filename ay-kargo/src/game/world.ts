@@ -38,7 +38,7 @@ export class Sim {
     this.W = WORLDS[L.world]; this.terrain = makeTerrain(L); this.r = rng(L.seed + 5);
     this.world = new planck.World({ gravity: new Vec2(0, -this.W.gravity) });
     const u = save.up;
-    this.torque = 6 + 1.5 * u.engine; this.maxSpd = 17 + 2.6 * u.engine;
+    this.torque = 8 + 1.5 * u.engine; this.maxSpd = 17 + 2.6 * u.engine;
     this.energyMax = 1; this.crushV = 7.5 - 1.2 * u.bumper; this.gooPow = u.bumper; this.turboLvl = u.turbo;
     this.shields = u.shield + (shieldBonus ? 1 : 0);
     this.buildRover();
@@ -48,7 +48,7 @@ export class Sim {
   }
 
   /** battery capacity in "energy seconds" */
-  get capacity() { return 55 + 16 * save.up.battery + (this.L.endless ? 20 : 0); }
+  get capacity() { return 70 + 18 * save.up.battery + (this.L.endless ? 20 : 0); }
   energySec = this.capacity;
   get speed() { return this.chassis.getLinearVelocity().x; }
   get distance() { return Math.max(0, this.chassis.getPosition().x - 4); }
@@ -59,7 +59,7 @@ export class Sim {
 
   private buildRover() {
     const x0 = 4, y0 = this.terrain.h(x0) + 1.25, u = save.up;
-    const ch = this.chassis = this.world.createBody({ type: 'dynamic', position: new Vec2(x0, y0), allowSleep: false });
+    const ch = this.chassis = this.world.createBody({ type: 'dynamic', position: new Vec2(x0, y0), allowSleep: false, angularDamping: 1.2 });
     this.ud(ch, 'chassis');
     ch.createFixture({ shape: new planck.Box(1.5, 0.25), density: 2.0, friction: 0.4 });
     const wallH = 0.55 + 0.1 * u.bed;
@@ -78,7 +78,7 @@ export class Sim {
     for (let i = 0; i < n; i++) {
       const row = Math.floor(i / perRow), col = i % perRow;
       const b = this.world.createBody({ type: 'dynamic', position: new Vec2(x0 - 1.15 + col * 0.54 + (row % 2) * 0.06, y0 + 0.25 + CRATE_HALF + 0.02 + row * 0.54), allowSleep: false });
-      this.ud(b, 'crate'); b.createFixture({ shape: new planck.Box(CRATE_HALF, CRATE_HALF), density: 0.45, friction: 0.65, restitution: 0.08 });
+      this.ud(b, 'crate'); b.createFixture({ shape: new planck.Box(CRATE_HALF, CRATE_HALF), density: 1.0, friction: 0.7, restitution: 0.05, filterCategoryBits: 2 });
       this.crates.push({ body: b, idx: i, dropped: false, stolen: false, dieT: 0 });
     }
   }
@@ -144,14 +144,14 @@ export class Sim {
       if (x > lim || this.onRamp(x) || L.slime <= 0) continue;
       const n = 3 + Math.floor(this.r() * (2 + L.slime * 3));
       for (let i = 0; i < n; i++) { const sx = x + i * 0.75, b = this.world.createBody({ type: 'dynamic', position: new Vec2(sx, this.hAt(sx) + 0.4), linearDamping: 2, fixedRotation: false });
-        this.ud(b, 'slime'); b.createFixture({ shape: new planck.Circle(0.32), density: 0.3, friction: 1.0, restitution: 0.1 }); this.slimes.push(b); }
+        this.ud(b, 'slime'); b.createFixture({ shape: new planck.Circle(0.32), density: 0.2, friction: 1.0, restitution: 0.1, filterCategoryBits: 4, filterMaskBits: 0xFFFF & ~2 }); this.slimes.push(b); }
     }
     while (rx + 70 > this.nextRock) {
       let x = this.nextRock; this.nextRock += (75 - 40 * L.rocks) * (0.7 + 0.6 * this.r());
       if (x > lim || this.onRamp(x)) continue;
       const n = 1 + Math.floor(this.r() * (1 + L.rough * 3));
       for (let i = 0; i < n; i++) { const s = 0.2 + this.r() * 0.18 + 0.12 * L.rough, b = this.world.createBody({ type: 'dynamic', position: new Vec2(x + (i % 2) * 0.6, this.hAt(x) + s + Math.floor(i / 2) * s * 2 + 0.1), angle: this.r() * 0.5 });
-        this.ud(b, 'rock'); b.createFixture({ shape: new planck.Box(s, s * 0.8), density: 1.2, friction: 0.7, restitution: 0.05 }); this.rocks.push(b); }
+        this.ud(b, 'rock'); b.createFixture({ shape: new planck.Box(s, s * 0.8), density: 0.7, friction: 0.7, restitution: 0.05 }); this.rocks.push(b); }
     }
     for (const arr of [this.slimes, this.rocks]) for (let i = arr.length - 1; i >= 0; i--) { if (arr[i].getPosition().x < rx - 40) { this.world.destroyBody(arr[i]); arr.splice(i, 1); } }
   }
@@ -207,10 +207,13 @@ export class Sim {
     }
     if (inp.brake && !inp.gas && v > 1.5) target = 0;
     this.throttle += (target - this.throttle) * Math.min(1, dt * 3);
+    const pitch = Math.atan2(Math.sin(ch.getAngle()), Math.cos(ch.getAngle())), grounded = this.wheelGround[0] > 0 || this.wheelGround[1] > 0;
+    const tc = grounded ? Math.max(0.1, 1 - Math.max(0, pitch - 0.22) * 2.6) : 1;
+    if (grounded && pitch > 0.3) ch.applyTorque(-16 * (pitch - 0.3), true);
     const brakingTq = inp.brake && !inp.gas && v > 1.5 ? 40 : 0;
     for (const j of this.joints) {
       j.setMotorSpeed(this.throttle);
-      j.setMaxMotorTorque((target === 0 && !inp.brake ? 0.6 : brakingTq || this.torque * gooF * (this.turboOn ? 1.5 : 1)));
+      j.setMaxMotorTorque((target === 0 && !inp.brake ? 0.6 : brakingTq || this.torque * tc * gooF * (this.turboOn ? 1.5 : 1)));
     }
     if (this.turboOn) ch.applyForceToCenter(new Vec2(Math.cos(ch.getAngle()) * 14, Math.sin(ch.getAngle()) * 14), true);
     if (this.goo > 0) ch.applyForceToCenter(new Vec2(-v * 2.2, 0), true);
@@ -219,7 +222,7 @@ export class Sim {
     this.energy = this.energySec / this.capacity;
     // air control + ground detect
     const airborne = this.wheelGround[0] <= 0 && this.wheelGround[1] <= 0;
-    if (airborne) { this.airT += dt; const tq = (inp.gas ? 1 : 0) - (inp.brake ? 1 : 0); if (tq && hasE || tq && inp.brake) ch.applyTorque(tq * 7, true); }
+    if (airborne) { this.airT += dt; const tq = (inp.gas ? 1 : 0) - (inp.brake ? 1 : 0); if (tq && hasE || tq && inp.brake) ch.applyTorque(tq * 9, true); }
     else {
       if (this.airT > 0.7) {
         const a = Math.atan2(Math.sin(ch.getAngle()), Math.cos(ch.getAngle()));
