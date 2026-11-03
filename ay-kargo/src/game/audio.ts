@@ -1,31 +1,92 @@
 let ctx: AudioContext | null = null;
 let master: GainNode;
-let engOsc: OscillatorNode, engGain: GainNode, ufoOsc: OscillatorNode, ufoGain: GainNode;
+interface Eng { saw: OscillatorNode; sq: OscillatorNode; am: OscillatorNode; lump: OscillatorNode; whine: OscillatorNode; lp: BiquadFilterNode; lumpAmt: GainNode; whineGain: GainNode; out: GainNode }
+let eng: Eng | null = null;
+let ufoOsc: OscillatorNode, ufoGain: GainNode;
 let muted = false, adMuted = false;
+
+function noiseBuf(c: AudioContext, secs: number) {
+  const n = Math.floor(c.sampleRate * secs), buf = c.createBuffer(1, n, c.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+  return buf;
+}
+
+function buildEngine(c: AudioContext): Eng {
+  const mix = c.createGain(); mix.gain.value = 0.6;
+  // sawtooth + square sub-octave
+  const saw = c.createOscillator(); saw.type = 'sawtooth'; saw.frequency.value = 30;
+  const sq = c.createOscillator(); sq.type = 'square'; sq.frequency.value = 15;
+  const sawG = c.createGain(); sawG.gain.value = 0.5; const sqG = c.createGain(); sqG.gain.value = 0.22;
+  saw.connect(sawG); sq.connect(sqG); sawG.connect(mix); sqG.connect(mix);
+  // combustion noise, amplitude-modulated at the firing frequency
+  const ns = c.createBufferSource(); ns.buffer = noiseBuf(c, 1); ns.loop = true;
+  const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 400; bp.Q.value = 0.8;
+  const amG = c.createGain(); amG.gain.value = 0.5;
+  const am = c.createOscillator(); am.type = 'sine'; am.frequency.value = 30;
+  const amD = c.createGain(); amD.gain.value = 0.5; am.connect(amD); amD.connect(amG.gain);
+  const nG = c.createGain(); nG.gain.value = 0.35;
+  ns.connect(bp); bp.connect(amG); amG.connect(nG); nG.connect(mix);
+  // lumpy idle: slow LFO on the mix level, depth set per frame
+  const lump = c.createOscillator(); lump.type = 'sine'; lump.frequency.value = 7;
+  const lumpAmt = c.createGain(); lumpAmt.gain.value = 0.2; lump.connect(lumpAmt); lumpAmt.connect(mix.gain);
+  // soft distortion
+  const sh = c.createWaveShaper(), curve = new Float32Array(257);
+  for (let i = 0; i < 257; i++) curve[i] = Math.tanh(((i - 128) / 128) * 2.2);
+  sh.curve = curve;
+  const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 500; lp.Q.value = 0.9;
+  const out = c.createGain(); out.gain.value = 0;
+  mix.connect(sh); sh.connect(lp); lp.connect(out);
+  // quiet intake whine
+  const whine = c.createOscillator(); whine.type = 'sine'; whine.frequency.value = 400;
+  const whineGain = c.createGain(); whineGain.gain.value = 0; whine.connect(whineGain); whineGain.connect(out);
+  out.connect(master);
+  [saw, sq, ns, am, lump, whine].forEach(n => n.start());
+  return { saw, sq, am, lump, whine, lp, lumpAmt, whineGain, out };
+}
 
 export function initAudio() {
   if (ctx) { if (ctx.state === 'suspended') ctx.resume().catch(() => {}); return; }
   try {
     const AC = window.AudioContext || (window as any).webkitAudioContext;
     ctx = new AC(); master = ctx.createGain(); master.connect(ctx.destination); applyMute();
-    engOsc = ctx.createOscillator(); engOsc.type = 'sawtooth'; engGain = ctx.createGain(); engGain.gain.value = 0;
-    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 500;
-    engOsc.connect(lp); lp.connect(engGain); engGain.connect(master); engOsc.start();
+    eng = buildEngine(ctx);
     ufoOsc = ctx.createOscillator(); ufoOsc.type = 'sine'; ufoGain = ctx.createGain(); ufoGain.gain.value = 0;
     ufoOsc.connect(ufoGain); ufoGain.connect(master); ufoOsc.start();
-  } catch { ctx = null; }
+  } catch { ctx = null; eng = null; }
 }
 function applyMute() { if (master) master.gain.value = muted || adMuted ? 0 : 0.5; }
 export function setMuted(m: boolean) { muted = m; applyMute(); }
 export function setAdMuted(m: boolean) { adMuted = m; applyMute(); }
 export const isMuted = () => muted;
 
-/** wheelSpeed01: wheel angular speed normalised to 0..1, pitch follows it */
-export function engine(wheelSpeed01: number, gas: boolean, on: boolean) {
-  if (!ctx) return;
+const IDLE_RPM = 900, REDLINE_RPM = 6500;
+const GEARS = [0, 0.18, 0.38, 0.6, 0.8, 1.0001]; // wheel-speed boundaries of 5 gears
+let gear = 0;
+/** wheelSpeed01: wheel speed 0..1 (drives virtual gearbox -> RPM). throttle: 0..1 (boolean accepted). */
+export function engine(wheelSpeed01: number, throttle: number | boolean, on: boolean) {
+  if (!ctx || !eng) return;
   const t = ctx.currentTime;
-  engOsc.frequency.setTargetAtTime(42 + wheelSpeed01 * 120 + (gas ? 14 : 0), t, 0.06);
-  engGain.gain.setTargetAtTime(on ? (gas ? 0.09 : 0.035) : 0, t, 0.1);
+  const th = Math.min(1, Math.max(0, typeof throttle === 'boolean' ? (throttle ? 1 : 0) : (throttle || 0)));
+  const s = Math.min(1, Math.max(0, wheelSpeed01 || 0));
+  while (gear < 4 && s > GEARS[gear + 1]) gear++;
+  while (gear > 0 && s < GEARS[gear] - 0.03) gear--;
+  const frac = Math.min(1, Math.max(0, (s - GEARS[gear]) / (GEARS[gear + 1] - GEARS[gear])));
+  const lo = gear === 0 ? IDLE_RPM : 2400;
+  let rpm = lo + frac * (REDLINE_RPM - lo);
+  rpm = Math.max(rpm, IDLE_RPM + th * 1400); // revving at standstill
+  const rr = (rpm - IDLE_RPM) / (REDLINE_RPM - IDLE_RPM);
+  const fire = rpm / 60 * 2;
+  const tc = 0.07;
+  eng.saw.frequency.setTargetAtTime(fire, t, tc);
+  eng.sq.frequency.setTargetAtTime(fire / 2, t, tc);
+  eng.am.frequency.setTargetAtTime(fire, t, tc);
+  eng.whine.frequency.setTargetAtTime(fire * 5, t, tc);
+  eng.whineGain.gain.setTargetAtTime(on ? 0.05 * rr * (0.3 + th) : 0, t, 0.1);
+  eng.lp.frequency.setTargetAtTime((300 + rr * 900 + th * 1600) * (th > 0.05 ? 1 : 0.7), t, 0.08);
+  const idle = Math.max(0, 1 - rr * 3) * (1 - th * 0.6);
+  eng.lumpAmt.gain.setTargetAtTime(0.1 + 0.3 * idle, t, 0.2);
+  eng.lump.frequency.setTargetAtTime(5 + rr * 4, t, 0.2);
+  eng.out.gain.setTargetAtTime(on ? 0.035 + 0.06 * th + 0.02 * rr : 0, t, 0.09);
 }
 let windSrc: AudioBufferSourceNode | null = null, windGain: GainNode | null = null;
 export function wind(level: number) {
@@ -51,11 +112,11 @@ function tone(f: number, dur: number, type: OscillatorType = 'sine', vol = 0.2, 
   g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
   o.connect(g); g.connect(master); o.start(t); o.stop(t + dur + 0.02);
 }
-function noise(dur: number, vol = 0.2, freq = 800, delay = 0) {
+function noise(dur: number, vol = 0.2, freq = 800, delay = 0, type: BiquadFilterType = 'lowpass') {
   if (!ctx) return; const t = ctx.currentTime + delay;
   const n = Math.floor(ctx.sampleRate * dur), buf = ctx.createBuffer(1, n, ctx.sampleRate), d = buf.getChannelData(0);
   for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
-  const s = ctx.createBufferSource(); s.buffer = buf; const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = freq;
+  const s = ctx.createBufferSource(); s.buffer = buf; const f = ctx.createBiquadFilter(); f.type = type; f.frequency.value = freq;
   const g = ctx.createGain(); g.gain.value = vol; s.connect(f); f.connect(g); g.connect(master); s.start(t);
 }
 export const sfx = {
@@ -76,5 +137,13 @@ export const sfx = {
   turbo: () => { noise(0.5, 0.15, 3000); tone(200, 0.5, 'sawtooth', 0.08, 400); },
   win: () => { [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.25, 'triangle', 0.18, 0, i * 0.12)); },
   fail: () => { [400, 330, 260, 190].forEach((f, i) => tone(f, 0.3, 'sawtooth', 0.1, 0, i * 0.14)); },
+  shatter: () => {
+    noise(0.05, 0.3, 2500, 0, 'bandpass'); noise(0.12, 0.25, 1200, 0.02, 'bandpass');
+    for (let i = 0; i < 5; i++) { const d = 0.01 + i * 0.03 + Math.random() * 0.02; tone(250 + Math.random() * 500, 0.04, 'square', 0.07, -100, d); noise(0.03, 0.14, 1500 + Math.random() * 2500, d, 'bandpass'); }
+    tone(110, 0.12, 'triangle', 0.2, -50);
+    for (let i = 0; i < 7; i++) noise(0.025, 0.07, 900 + Math.random() * 2000, 0.18 + i * 0.045 + Math.random() * 0.03, 'bandpass');
+  },
+  latch: () => { noise(0.1, 0.22, 900); tone(320, 0.12, 'sine', 0.2, -200); tone(180, 0.1, 'sine', 0.1, 220, 0.06); tone(420, 0.05, 'sine', 0.06, 200, 0.14); },
+  alien: () => { tone(900, 0.09, 'sine', 0.1, 700); tone(1700, 0.1, 'sine', 0.09, -900, 0.09); tone(1000, 0.08, 'triangle', 0.06, 600, 0.2); },
   star: (i = 0) => tone(660 + i * 220, 0.3, 'triangle', 0.2),
 };

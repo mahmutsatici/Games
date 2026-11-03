@@ -4,12 +4,15 @@ import { save } from './save';
 import { sfx } from './audio';
 
 const Vec2 = planck.Vec2;
-export interface Input { gas: boolean; brake: boolean; turbo: boolean; }
+/** gas = forward (Up/W), brake = brake & reverse (Down/S), tiltL/tiltR rotate the rover (Left/A, Right/D), turbo = Space */
+export interface Input { gas: boolean; brake: boolean; turbo: boolean; tiltL?: boolean; tiltR?: boolean; }
 export interface Ud { k: string; px: number; py: number; pa: number; }
 export interface Crate { body: planck.Body; idx: number; glass: boolean; lost: boolean; gone: boolean; lostT: number; warned: number; }
-export interface Slime { body: planck.Body; phase: number; dead: boolean; stuck: boolean; }
-export type PType = 'dust' | 'spark' | 'goo' | 'coin' | 'debris' | 'glass' | 'smoke' | 'energy' | 'flash';
-export interface Particle { x: number; y: number; vx: number; vy: number; life: number; max: number; type: PType; size: number; g: number; }
+export interface Slime { body: planck.Body; phase: number; dead: boolean; stuck: boolean; hopT: number; nextHop: number; }
+/** a slime stuck on the rover, in chassis-local metres */
+export interface Latched { lx: number; ly: number; t: number; phase: number; }
+export type PType = 'dust' | 'spark' | 'goo' | 'coin' | 'debris' | 'glass' | 'smoke' | 'energy' | 'flash' | 'plank' | 'fire' | 'ring';
+export interface Particle { x: number; y: number; vx: number; vy: number; life: number; max: number; type: PType; size: number; g: number; rot?: number; vr?: number; }
 export interface Meteor { x: number; t: number; }
 export interface Ufo { x: number; y: number; beam: number; target: Crate | null; life: number; leaving: boolean; }
 export interface Crater { x: number; r: number; d: number; }
@@ -22,18 +25,18 @@ export const CRATE_HALF = 0.22;
 export class Sim {
   world: planck.World; terrain: Terrain; W = WORLDS[0];
   chassis!: planck.Body; wheels: planck.Body[] = []; joints: planck.WheelJoint[] = [];
-  crates: Crate[] = []; slimes: Slime[] = []; rocks: planck.Body[] = [];
+  crates: Crate[] = []; slimes: Slime[] = []; rocks: planck.Body[] = []; latched: Latched[] = [];
   meteors: Meteor[] = []; ufo: Ufo | null = null; craters: Crater[] = [];
   particles: Particle[] = []; popups: Popup[] = []; chunks = new Map<number, planck.Body>();
   state: 'run' | 'win' | 'fail' = 'run'; failReason: '' | 'flip' | 'battery' | 'crates' = '';
   t = 0; acc = 0; shake = 0; slowmo = 0; punch = 0; hitFlash = 0; shieldFlash = 0;
   coinsRun = 0; squashed = 0; perfect = 0; pickedCoins = 0;
   battery = 0; batteryMax = 0; rechargeUsed = false; flipT = 0; stillT = 0;
-  shields = 0; turbo = 1; turboOn = false; stickT = 0; storm = 0;
+  shields = 0; turbo = 1; turboOn = false; storm = 0;
   airT = 0; airMaxH = 0; grounded = 2; scraping = false; wallH = 0.4;
   lastLostT = -9; winT = 0; crateHalf = CRATE_HALF;
   private r: () => number; private meteorT = 3.5; private ufoT = 7; private hitQueue: Slime[] = [];
-  private knockT = 0; private breakQ: Crate[] = []; private pickIdx = 0;
+  private knockT = 0; private breakQ: Crate[] = []; private shatterQ: Crate[] = []; private pickIdx = 0;
   private maxSpd = 13; private torque = 7;
 
   constructor(public L: LevelDef, shieldBonus = false) {
@@ -121,6 +124,13 @@ export class Sim {
     const a = c.getFixtureA().getBody(), b = c.getFixtureB().getBody();
     const ua = a.getUserData() as Ud, ub = b.getUserData() as Ud;
     if (!ua || !ub) return;
+    // a crate that leaves the bed and touches the ground smashes instantly (so it never blocks the road)
+    for (const [u, body, o] of [[ua, a, ub], [ub, b, ua]] as const) {
+      if (u.k !== 'crate' || (o.k !== 'ground' && o.k !== 'rock')) continue;
+      const cr = this.crates.find(q => q.body === body); if (!cr || cr.lost || this.shatterQ.includes(cr)) continue;
+      if (o.k === 'rock') { const lp = this.chassis.getLocalPoint(body.getPosition()); if (lp.x > -1.45 && lp.x < 0.6 && lp.y > -0.2 && lp.y < 0.18 + this.wallH + 0.6) continue; } // a rock bouncing into the bed doesn't count
+      this.shatterQ.push(cr);
+    }
   }
   private post(c: planck.Contact, imp: { normalImpulses: number[] }) {
     const a = c.getFixtureA().getBody(), b = c.getFixtureB().getBody();
@@ -150,11 +160,12 @@ export class Sim {
     const dt = Math.min(dtReal, 0.1) * (this.slowmo > 0 ? 0.3 : 1);
     if (this.state !== 'fail') {
       this.acc += dt;
-      while (this.acc >= DT) { this.snap(); this.step(DT, inp); this.acc -= DT; }
+      let n = 0; while (this.acc >= DT && n < 4) { this.snap(); this.step(DT, inp); this.acc -= DT; n++; }
+      if (this.acc >= DT) this.acc = DT * 0.99; // never spiral: drop time we cannot catch up on
     }
     this.shake = Math.max(0, this.shake - dtReal * 2.6); this.punch = Math.max(0, this.punch - dtReal * 2.5);
     this.hitFlash = Math.max(0, this.hitFlash - dtReal * 2.5); this.shieldFlash = Math.max(0, this.shieldFlash - dtReal * 2);
-    for (let i = this.particles.length - 1; i >= 0; i--) { const p = this.particles[i]; p.life -= dt; if (p.life <= 0) { this.particles.splice(i, 1); continue; } p.x += p.vx * dt; p.y += p.vy * dt; p.vy -= p.g * dt; if (p.type === 'dust' || p.type === 'smoke') { p.vx *= 1 - dt * 1.5; } }
+    for (let i = this.particles.length - 1; i >= 0; i--) { const p = this.particles[i]; p.life -= dt; if (p.life <= 0) { this.particles[i] = this.particles[this.particles.length - 1]; this.particles.pop(); continue; } p.x += p.vx * dt; p.y += p.vy * dt; p.vy -= p.g * dt; if (p.vr) p.rot = (p.rot || 0) + p.vr * dt; if (p.type === 'dust' || p.type === 'smoke' || p.type === 'fire') { p.vx *= 1 - dt * 1.5; } }
     for (let i = this.popups.length - 1; i >= 0; i--) { const p = this.popups[i]; p.life -= dtReal * 0.9; p.y += dtReal * 1.3; if (p.life <= 0) this.popups.splice(i, 1); }
   }
   get alpha() { return this.acc / DT; }
@@ -173,6 +184,7 @@ export class Sim {
     this.t += dt; this.knockT -= dt;
     const win = this.state === 'win';
     this.drive(dt, win ? { gas: false, brake: true, turbo: false } : inp);
+    for (const l of this.latched) { l.t += dt; l.phase += dt * 6; }
     this.world.step(dt, 8, 3);
     if (win) { this.winT += dt; return; }
     this.afterStep(dt, inp);
@@ -181,7 +193,8 @@ export class Sim {
   private drive(dt: number, inp: Input) {
     const ch = this.chassis, u = save.up, hasE = this.battery > 0, win = this.state === 'win';
     let ms = 0, tq = 0.6;
-    if (inp.gas && hasE) { ms = -this.maxSpd; tq = this.torque; }
+    const slow = Math.max(0.45, 1 - 0.16 * this.latched.length);
+    if (inp.gas && hasE) { ms = -this.maxSpd * slow; tq = this.torque; }
     else if (inp.brake && (hasE || win)) { ms = win ? 0 : this.maxSpd * 0.55; tq = win ? 30 : this.torque; }
     // mild anti-flip assist: only beyond 0.6 rad pitch, so normal climbing feels like the prototype
     const pitch = Math.atan2(Math.sin(ch.getAngle()), Math.cos(ch.getAngle()));
@@ -189,39 +202,57 @@ export class Sim {
     if (this.grounded > 0 && inp.gas && pitch > 0.5) { tq *= Math.max(0.1, 1 - (pitch - 0.5) * 3); if (pitch > 0.7) ch.applyTorque(-5 * (pitch - 0.7), true); }
     for (const j of this.joints) { j.setMotorSpeed(ms); j.setMaxMotorTorque(tq); }
     const air = this.grounded === 0;
-    if (air && !win) { if (inp.gas) ch.applyTorque(2.2, true); if (inp.brake) ch.applyTorque(-2.2, true); }
+    // Left/Right rotate the rover: strong in the air, gentle balance help on the ground
+    const tilt = (inp.tiltL ? 1 : 0) - (inp.tiltR ? 1 : 0);
+    if (tilt && !win) ch.applyTorque(tilt * (air ? 2.6 : 1.4), true);
+    else if (air && !win) ch.setAngularVelocity(ch.getAngularVelocity() * (1 - dt * 1.8)); // stop spinning when the stick is released
+    if (this.latched.length) { const v = ch.getLinearVelocity(); ch.applyForceToCenter(new Vec2(-v.x * 0.9 * this.latched.length, 0), true); if (hasE) this.battery = Math.max(0, this.battery - dt * 1.2 * this.latched.length); }
     if (!win && (inp.gas || inp.brake) && hasE) this.battery = Math.max(0, this.battery - dt * (inp.gas ? 3.5 : 2));
     // turbo (prototype values)
     this.turboOn = !win && inp.turbo && this.turbo > 0;
     if (this.turboOn) {
       if (this.turbo >= 0.999) sfx.turbo();
+      if (this.latched.length) this.shakeOff(true);
       this.turbo = Math.max(0, this.turbo - dt / this.turboDur);
       ch.applyForceToCenter(ch.getWorldVector(new Vec2(26 + 4 * u.turbo, 0)), true);
       if (Math.random() < 0.8) { const bp = ch.getWorldPoint(new Vec2(-1.45, 0.05)); this.particles.length < MAX_P && this.particles.push({ x: bp.x, y: bp.y, vx: -4 - Math.random() * 3, vy: Math.random() - 0.5, life: 0.5, max: 0.5, type: 'smoke', size: 0.12, g: -0.5 }); }
     } else this.turbo = Math.min(1, this.turbo + dt * 0.12);
-    if (this.stickT > 0) { this.stickT -= dt; const v = ch.getLinearVelocity(); ch.setLinearVelocity(new Vec2(v.x * (1 - dt * 2.2), v.y)); }
-  }
+      }
 
   private afterStep(dt: number, inp: Input) {
     const ch = this.chassis, p = ch.getPosition(), u = save.up, v = this.speed;
-    // slime hits (prototype rule: fast or turbo crushes, slow sticks). Slimes don't block the rover physically.
+    // slimes: fast (or turbo) hit squashes them for coins, a slow hit makes them latch on and drag the rover down
     const w0 = this.wheels[0].getPosition(), w1 = this.wheels[1].getPosition();
-    for (const s of this.slimes) { const q = s.body.getPosition(); if (Math.hypot(q.x - w0.x, q.y - w0.y) < 0.68 || Math.hypot(q.x - w1.x, q.y - w1.y) < 0.68 || Math.abs(ch.getLocalPoint(q).x) < 1.3 && Math.abs(ch.getLocalPoint(q).y) < 0.45) this.hitQueue.push(s); }
+    for (const s of this.slimes) { const q = s.body.getPosition(), lq = ch.getLocalPoint(q);
+      if (Math.hypot(q.x - w0.x, q.y - w0.y) < 0.68 || Math.hypot(q.x - w1.x, q.y - w1.y) < 0.68 || (Math.abs(lq.x) < 1.45 && lq.y > -0.5 && lq.y < 1.1)) this.hitQueue.push(s); }
     for (const s of this.hitQueue) {
       if (s.dead) continue;
-      const q = s.body.getPosition();
-      if (v > 6.5 - 0.8 * u.bumper || this.turboOn) { s.dead = true; this.world.destroyBody(s.body); this.coinsRun += 3; this.squashed++; this.pop(q.x, q.y + 0.6, 3, '#a3e635'); this.emit(q.x, q.y, 'goo', 12, 4); sfx.squash(); this.shake = Math.max(this.shake, 0.15); }
-      else { s.dead = true; this.world.destroyBody(s.body); this.stickT = 1.2; this.emit(q.x, q.y + 0.2, 'goo', 10, 2.5); sfx.splat(); }
+      const q = s.body.getPosition(); s.dead = true; this.world.destroyBody(s.body);
+      if (v > 6.5 - 0.8 * u.bumper || this.turboOn) { this.coinsRun += 3; this.squashed++; this.pop(q.x, q.y + 0.6, 3, '#a3e635'); this.emit(q.x, q.y, 'goo', 14, 4.5); sfx.squash(); this.shake = Math.max(this.shake, 0.18);
+        this.wheels[1].applyLinearImpulse(new Vec2(0, 0.35), this.wheels[1].getPosition(), true); }
+      else if (this.latched.length < 4) { const lq = ch.getLocalPoint(q); this.latched.push({ lx: Math.max(-1.2, Math.min(1.3, lq.x)), ly: lq.y > 0.3 ? 0.42 : 0.02, t: 0, phase: this.r() * 6 });
+        const cv = ch.getLinearVelocity(); ch.setLinearVelocity(new Vec2(cv.x * 0.65, cv.y)); this.emit(q.x, q.y + 0.2, 'goo', 10, 2.5); sfx.latch(); this.shake = Math.max(this.shake, 0.12); }
+      else { this.emit(q.x, q.y, 'goo', 10, 3); sfx.splat(); }
     }
     this.hitQueue.length = 0;
     this.slimes = this.slimes.filter(s => !s.dead);
-    for (const s of this.slimes) { s.phase += dt * 3; const sp = s.body.getPosition(); if (Math.abs(sp.x - p.x) < 14 && Math.random() < 0.006) s.body.applyLinearImpulse(new Vec2(p.x < sp.x ? -0.12 : 0.12, 0.36), sp, true); }
+    for (const l of this.latched) if (l.t > 6) { this.shakeOff(false); break; }
+    // slimes hop toward the rover when it comes close
+    for (const s of this.slimes) {
+      s.phase += dt * 3; s.hopT += dt; const sp = s.body.getPosition(), dx = p.x - sp.x;
+      if (s.hopT > s.nextHop && Math.abs(dx) < 7 && Math.abs(s.body.getLinearVelocity().y) < 0.2) {
+        s.hopT = 0; s.nextHop = 1 + this.r() * 1.4; if (this.r() < 0.4) sfx.alien();
+        s.body.applyLinearImpulse(new Vec2(Math.sign(dx) * 0.16, 0.42 + this.r() * 0.18), sp, true);
+      }
+    }
     this.spawnAhead();
     this.hazards(dt);
     this.pickups();
     this.cratesCheck(dt);
     for (const c of this.breakQ) if (!c.lost) { const cp = c.body.getPosition(); this.loseCrate(c, true); this.emit(cp.x, cp.y, 'glass', 16, 4); sfx.glass(); }
     this.breakQ.length = 0;
+    for (const c of this.shatterQ) if (!c.lost) this.shatter(c);
+    this.shatterQ.length = 0;
     this.landing(dt);
     this.fxDrive(inp);
     this.updateChunks();
@@ -244,7 +275,7 @@ export class Sim {
       for (let i = 0; i < g.n; i++) {
         const sx = g.x + i * 0.9, b = this.world.createBody({ type: 'dynamic', position: new Vec2(sx, this.hAt(sx) + 0.3) });
         this.ud(b, 'slime'); b.createFixture({ shape: new planck.Box(0.3, 0.24), density: 0.5, friction: 0.9, filterCategoryBits: 4, filterMaskBits: 0xffff & ~2 & ~8 });
-        this.slimes.push({ body: b, phase: this.r() * 6, dead: false, stuck: false });
+        this.slimes.push({ body: b, phase: this.r() * 6, dead: false, stuck: false, hopT: 0, nextHop: 0.5 + this.r() * 1.5 });
       }
     }
     for (const g of T.rocks) {
@@ -268,11 +299,12 @@ export class Sim {
     }
     for (let i = this.meteors.length - 1; i >= 0; i--) {
       const m = this.meteors[i]; m.t -= dt;
-      if (m.t > 0) continue;
+      if (m.t > 0) { const mp = this.meteorPos(m); if (mp && this.particles.length < MAX_P && (this.t * 60 | 0) % 2 === 0) for (let k = 0; k < 1; k++) { const life = 0.35 + Math.random() * 0.35; this.particles.push({ x: mp.x + (Math.random() - 0.5) * 0.3, y: mp.y + (Math.random() - 0.5) * 0.3, vx: 3 + Math.random() * 2, vy: 6 + Math.random() * 3, life, max: life, type: 'fire', size: 0.1 + Math.random() * 0.1, g: 0 }); } continue; }
       this.meteors.splice(i, 1);
       const gy = this.hAt(m.x), d = Math.abs(ch.getPosition().x - m.x);
       this.addCrater(m.x, 1.8, 0.45); sfx.boom();
-      this.emit(m.x, gy + 0.2, 'debris', 18, 7); this.emit(m.x, gy + 0.3, 'spark', 12, 9); this.emit(m.x, gy + 0.2, 'dust', 10, 3); this.emit(m.x, gy + 0.5, 'flash', 1, 0, 0, 0);
+      for (let k = 0; k < 14 && this.particles.length < MAX_P; k++) { const a = 0.2 + Math.random() * (Math.PI - 0.4), sp = 3 + Math.random() * 6, life = 0.8 + Math.random() * 0.6; this.particles.push({ x: m.x, y: gy + 0.2, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life, max: life, type: 'debris', size: 0.08 + Math.random() * 0.14, g: this.W.gravity, rot: Math.random() * 6, vr: (Math.random() - 0.5) * 14 }); }
+      this.emit(m.x, gy + 0.3, 'spark', 12, 9); this.emit(m.x, gy + 0.2, 'dust', 14, 3.5, 0.7, 0.5); this.emit(m.x, gy + 0.5, 'flash', 1, 0, 0, 0); this.emit(m.x, gy + 0.1, 'ring', 1, 0, 0, 0);
       this.shake = Math.max(this.shake, d < 12 ? 0.55 : 0.2);
       if (d < 4.5) { this.slowmo = 0.3; this.punch = 1; }
       if (d < 2.4) {
@@ -280,12 +312,18 @@ export class Sim {
         if (this.shields > 0) { this.shields--; this.shieldFlash = 1; sfx.shield(); this.emit(p.x, p.y + 0.5, 'spark', 14, 6); }
         else {
           ch.applyLinearImpulse(new Vec2((p.x - m.x) * 0.6, 3.2), ch.getWorldPoint(new Vec2(-0.15, 0)), true);
-          for (const c of this.crates) if (!c.lost) c.body.applyLinearImpulse(new Vec2((this.r() - 0.5) * 0.25, 0.32 + this.r() * 0.12), c.body.getPosition(), true);
+          for (const c of this.crates) if (!c.lost) c.body.applyLinearImpulse(new Vec2((this.r() - 0.5) * 0.15, (0.19 + this.r() * 0.08) * c.body.getMass() / 0.068), c.body.getPosition(), true);
         }
       }
       for (const s of this.slimes) if (!s.dead && Math.abs(s.body.getPosition().x - m.x) < 2) { s.dead = true; this.world.destroyBody(s.body); }
     }
     if (L.ufo > 0) this.ufoStep(dt, u.turbo);
+  }
+
+  /** visual position of a falling meteor (world metres); it streaks in from the upper right during the last 0.9 s */
+  meteorPos(m: Meteor): { x: number; y: number; k: number } | null {
+    if (m.t > 0.9) return null; const k = m.t / 0.9, gy = this.hAt(m.x);
+    return { x: m.x + 10 * k, y: gy + 0.3 + 7.5 * k, k };
   }
 
   private ufoStep(dt: number, _t: number) {
@@ -325,21 +363,36 @@ export class Sim {
   }
 
   private loseCrate(c: Crate, gone: boolean) {
-    c.lost = true; c.lostT = this.t; this.lastLostT = this.t; sfx.drop();
+    c.lost = true; c.lostT = this.t; this.lastLostT = this.t;
     if (gone && !c.gone) { c.gone = true; this.world.destroyBody(c.body); }
   }
   private cratesCheck(dt: number) {
     const ch = this.chassis, p = ch.getPosition();
     for (const c of this.crates) {
-      if (c.gone) continue;
-      if (c.lost) { if (this.t - c.lostT > 3) { c.gone = true; this.world.destroyBody(c.body); } continue; }
+      if (c.lost) continue;
       const cp = c.body.getPosition(), lp = ch.getLocalPoint(cp);
       if (this.ufo && this.ufo.target === c && this.ufo.beam > 0.6) continue;
       // about to fall: above the wall and outside the bed -> short slow-mo + camera punch
       if (lp.y > 0.18 + this.wallH * 0.7 && (lp.x < -1.3 || lp.x > 0.45) && this.t - c.warned > 2.5) { c.warned = this.t; this.slowmo = 0.3; this.punch = 1; }
-      if ((lp.x < -2.2 || lp.x > 1.6 || lp.y < -1.2 || lp.y > 3.2) && Math.hypot(cp.x - p.x, cp.y - p.y) > 3.2) { this.loseCrate(c, false); this.shake = Math.max(this.shake, 0.3); }
+      // only counted as lost once it hits the ground (see begin-contact); fallback if it somehow got far away
+      if (Math.hypot(cp.x - p.x, cp.y - p.y) > 14 || cp.y < this.hAt(cp.x) - 2) this.shatter(c);
     }
     void dt;
+  }
+  private shatter(c: Crate) {
+    const cp = c.body.getPosition(), v = c.body.getLinearVelocity();
+    this.loseCrate(c, true); sfx.shatter(); this.shake = Math.max(this.shake, 0.3);
+    if (c.glass) { this.emit(cp.x, cp.y, 'glass', 18, 4); return; }
+    for (let i = 0; i < 9 && this.particles.length < MAX_P; i++) { const a = Math.random() * Math.PI, s = 1.5 + Math.random() * 3.5, life = 0.9 + Math.random() * 0.6;
+      this.particles.push({ x: cp.x + (Math.random() - 0.5) * 0.3, y: cp.y, vx: Math.cos(a) * s + v.x * 0.4, vy: Math.sin(a) * s + 1, life, max: life, type: 'plank', size: 0.12 + Math.random() * 0.12, g: this.W.gravity, rot: Math.random() * 6, vr: (Math.random() - 0.5) * 16 }); }
+    this.emit(cp.x, cp.y, 'dust', 8, 2, 0.6, 1);
+  }
+  /** shake latched slimes off (turbo) or drop the oldest one */
+  private shakeOff(all: boolean) {
+    const ch = this.chassis;
+    const drop = all ? this.latched.splice(0) : this.latched.splice(0, 1);
+    for (const l of drop) { const wp = ch.getWorldPoint(new Vec2(l.lx, l.ly)); this.emit(wp.x, wp.y, 'goo', 10, 4); if (all) { this.coinsRun += 1; this.pop(wp.x, wp.y + 0.5, 1, '#a3e635'); } }
+    sfx.squash();
   }
 
   private landing(dt: number) {

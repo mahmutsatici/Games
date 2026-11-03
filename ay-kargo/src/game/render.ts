@@ -31,8 +31,7 @@ export class Camera {
 // ---------------- cached sky ----------------
 const planetCache = new Map<number, HTMLCanvasElement>();
 const mk = (w: number, h: number) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
-// CPU-backed offscreen canvases: blitting them into the main canvas never needs a GPU readback
-const ctx2d = (c: HTMLCanvasElement) => c.getContext('2d', { willReadFrequently: true })!;
+const ctx2d = (c: HTMLCanvasElement) => c.getContext('2d')!;
 function blob(g: CanvasRenderingContext2D, x: number, y: number, r: number, seed: number) {
   g.beginPath(); for (let i = 0; i <= 12; i++) { const a = i / 12 * Math.PI * 2, rr = r * (0.7 + 0.5 * hash(seed + i)); g.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr * 0.8); } g.closePath(); g.fill();
 }
@@ -165,7 +164,7 @@ export function drawWorld(ctx: CanvasRenderingContext2D, sim: Sim, cam: Camera, 
   const coinSpr = sprite('coin', [-0.33, -0.33, 0.33, 0.36], (g, s) => drawCoin(g, 0, 0, 0.27 * s, 0));
   for (const p of sim.terrain.pickups) { if (p.taken || p.x < x0 || p.x > x1) continue; const sx = X(p.x), sy = Y(p.y) + Math.sin(t * 3 + p.x) * 4; if (p.k === 'coin') blit(ctx, coinSpr, sx, sy, 0, S, Math.max(0.15, Math.abs(Math.cos((t + p.x * 0.4) * 2.5))), 1); else drawCell(ctx, sx, sy, S, t); }
   // ---- meteor warnings ----
-  for (const m of sim.meteors) drawMeteor(ctx, sim, m.x, m.t, X, Y, S, t);
+  for (const m of sim.meteors) drawMeteor(ctx, sim, m, X, Y, S, t);
   // ---- rover ground shadow ----
   const ch = interp(sim.chassis, a), gy = sim.groundY(ch.x), hgt = Math.max(0, ch.y - gy);
   ctx.fillStyle = `rgba(0,0,0,${0.32 * Math.max(0.15, 1 - hgt / 6)})`; ctx.beginPath(); ctx.ellipse(X(ch.x), Y(gy) + 2, S * (1.6 + hgt * 0.1), S * 0.16, 0, 0, 7); ctx.fill();
@@ -174,8 +173,10 @@ export function drawWorld(ctx: CanvasRenderingContext2D, sim: Sim, cam: Camera, 
     ctx.beginPath(); vs.forEach((v, i) => i ? ctx.lineTo(v.x * S, -v.y * S) : ctx.moveTo(v.x * S, -v.y * S)); ctx.closePath(); ctx.fillStyle = wd.rock[0]; ctx.fill();
     ctx.save(); ctx.clip(); ctx.fillStyle = wd.rock[1]; ctx.fillRect(-S, 0, 2 * S, S); ctx.fillStyle = wd.rock[2]; ctx.globalAlpha = 0.7; ctx.fillRect(-S, -S, S * 0.9, S * 0.75); ctx.restore();
     ctx.globalAlpha = 1; ctx.strokeStyle = G.line; ctx.lineWidth = 2.5; ctx.stroke(); ctx.restore(); }
-  for (const s of sim.slimes) { const q = interp(s.body, a), dir = Math.sign(ch.x - q.x) || 1, sq = 1 + Math.sin(s.phase) * 0.09;
-    blit(ctx, sprite('slime:' + dir, [-0.45, -0.66, 0.45, 0.42], (g, sz) => drawSlime(g, { x: 0, y: 0, a: 0 }, 0, () => 0, () => 0, sz, dir)), X(q.x), Y(q.y), q.a, S, 1 / sq, sq); }
+  const slimeSpr = sprite('slime', [-0.5, -0.75, 0.5, 0.42], (g, sz) => drawSlime(g, sz));
+  for (const s of sim.slimes) { const q = interp(s.body, a), vy = s.body.getLinearVelocity().y, st = Math.max(-0.18, Math.min(0.22, vy * 0.05)) + Math.sin(s.phase * 1.4) * 0.05;
+    const x = X(q.x), y = Y(q.y), sq = 1 + st; blit(ctx, slimeSpr, x, y, q.a, S, 1 / sq, sq);
+    slimeEyes(ctx, x, y - (sq - 1) * 0.2 * S, S * Math.min(1.1, 1 / sq), Math.max(-1, Math.min(1, (ch.x - q.x) / 3)), (t * 0.7 + s.phase) % 3 < 0.12, Math.abs(ch.x - q.x) < 4); }
   // ---- rover + crates ----
   drawRover(ctx, sim, a, X, Y, S, t);
   // ---- UFO ----
@@ -183,12 +184,20 @@ export function drawWorld(ctx: CanvasRenderingContext2D, sim: Sim, cam: Camera, 
   // ---- particles ----
   for (const p of sim.particles) {
     const al = p.life / p.max, sx = X(p.x), sy = Y(p.y);
-    if (p.type === 'spark') { ctx.strokeStyle = `rgba(255,${190 + 60 * al | 0},90,${al})`; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx - p.vx * 0.03 * S, sy + p.vy * 0.03 * S); ctx.stroke(); continue; }
-    if (p.type === 'flash') { const k = 1 - al; ctx.fillStyle = `rgba(255,240,200,${al * 0.8})`; ctx.beginPath(); ctx.arc(sx, sy, (0.6 + k * 3) * S, 0, 7); ctx.fill(); ctx.strokeStyle = `rgba(255,170,80,${al})`; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(sx, sy, (1 + k * 4.5) * S, 0, 7); ctx.stroke(); continue; }
+    switch (p.type) {
+      case 'spark': ctx.globalAlpha = al; ctx.strokeStyle = '#ffd77a'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx - p.vx * 0.03 * S, sy + p.vy * 0.03 * S); ctx.stroke(); continue;
+      case 'flash': { const k = 1 - al; ctx.globalAlpha = al * 0.8; ctx.fillStyle = '#fff0c8'; ctx.beginPath(); ctx.arc(sx, sy, (0.6 + k * 3) * S, 0, 7); ctx.fill(); continue; }
+      case 'ring': { const k = 1 - al; ctx.globalAlpha = al; ctx.strokeStyle = '#ffd9a0'; ctx.lineWidth = 6 * al + 1; ctx.beginPath(); ctx.ellipse(sx, sy, (0.8 + k * 6) * S, (0.2 + k * 1.2) * S, 0, 0, 7); ctx.stroke(); continue; }
+      case 'plank': case 'debris': { ctx.globalAlpha = Math.min(1, al * 2); ctx.save(); ctx.translate(sx, sy); ctx.rotate(p.rot || 0); const w = p.size * S;
+        if (p.type === 'plank') { ctx.fillStyle = '#d99a4e'; ctx.fillRect(-w, -w * 0.28, w * 2, w * 0.56); ctx.fillStyle = '#a8692c'; ctx.fillRect(-w, w * 0.08, w * 2, w * 0.2); ctx.strokeStyle = '#6b3f17'; ctx.lineWidth = 1.5; ctx.strokeRect(-w, -w * 0.28, w * 2, w * 0.56); }
+        else { ctx.fillStyle = wd.rock[1]; ctx.beginPath(); ctx.moveTo(-w, -w * 0.4); ctx.lineTo(w * 0.3, -w); ctx.lineTo(w, w * 0.2); ctx.lineTo(-w * 0.2, w); ctx.closePath(); ctx.fill(); ctx.fillStyle = wd.rock[2]; ctx.fillRect(-w * 0.5, -w * 0.5, w * 0.5, w * 0.35); }
+        ctx.restore(); continue; }
+      case 'fire': { ctx.globalAlpha = al * 0.9; ctx.fillStyle = al > 0.6 ? '#fff1b0' : al > 0.35 ? '#ffa13a' : '#c0502a'; ctx.beginPath(); ctx.arc(sx, sy, p.size * S * (0.5 + al), 0, 7); ctx.fill(); continue; }
+    }
     ctx.globalAlpha = p.type === 'dust' || p.type === 'smoke' ? al * 0.55 : al;
-    ctx.fillStyle = p.type === 'goo' ? '#7be05a' : p.type === 'coin' ? '#ffd23a' : p.type === 'debris' ? wd.rock[1] : p.type === 'glass' ? '#bff3ff' : p.type === 'energy' ? '#7dff9a' : p.type === 'smoke' ? (al > 0.6 ? '#ffb35c' : '#9aa0ad') : wd.dust;
+    ctx.fillStyle = p.type === 'goo' ? '#7be05a' : p.type === 'coin' ? '#ffd23a' : p.type === 'glass' ? '#bff3ff' : p.type === 'energy' ? '#7dff9a' : p.type === 'smoke' ? (al > 0.6 ? '#ffb35c' : '#9aa0ad') : wd.dust;
     const r = p.size * S * (p.type === 'dust' || p.type === 'smoke' ? 1.6 - al * 0.6 : 1);
-    if (p.type === 'debris' || p.type === 'glass') ctx.fillRect(sx - r, sy - r, r * 2, r * 2); else { ctx.beginPath(); ctx.arc(sx, sy, r, 0, 7); ctx.fill(); }
+    if (p.type === 'glass') ctx.fillRect(sx - r, sy - r, r * 2, r * 2); else { ctx.beginPath(); ctx.arc(sx, sy, r, 0, 7); ctx.fill(); }
   }
   ctx.globalAlpha = 1;
   // ---- score popups ----
@@ -217,18 +226,29 @@ function warnIcon(ctx: CanvasRenderingContext2D, x: number, y: number, al: numbe
   ctx.fillStyle = '#fff'; ctx.fillRect(x - 3, y - 10, 6, 17); ctx.fillRect(x - 3, y + 10, 6, 6); ctx.globalAlpha = 1;
 }
 
-function drawMeteor(ctx: CanvasRenderingContext2D, sim: Sim, mx: number, tl: number, X: (x: number) => number, Y: (y: number) => number, S: number, t: number) {
-  const gy = sim.groundY(mx), sx = X(mx), sy = Y(gy), p = 1 - tl / 1.6, pulse = 0.5 + 0.5 * Math.sin(t * 18);
+function meteorRock(ctx: CanvasRenderingContext2D, S: number) {
+  const r = 0.55 * S;
+  const gl = ctx.createRadialGradient(0, 0, r * 0.6, 0, 0, r * 2); gl.addColorStop(0, 'rgba(255,170,60,.55)'); gl.addColorStop(1, 'rgba(255,90,20,0)'); ctx.fillStyle = gl; ctx.beginPath(); ctx.arc(0, 0, r * 2, 0, 7); ctx.fill();
+  const shape = () => { ctx.beginPath(); for (let i = 0; i < 11; i++) { const a = i / 11 * Math.PI * 2, rr2 = r * (0.82 + 0.25 * hash(i * 7.3 + 1)); ctx.lineTo(Math.cos(a) * rr2, Math.sin(a) * rr2); } ctx.closePath(); };
+  shape(); const g = ctx.createRadialGradient(-r * 0.35, -r * 0.35, r * 0.1, 0, 0, r * 1.1); g.addColorStop(0, '#9a8576'); g.addColorStop(0.6, '#5d4a3e'); g.addColorStop(1, '#2e221c'); ctx.fillStyle = g; ctx.fill();
+  ctx.strokeStyle = '#1e1511'; ctx.lineWidth = 3; ctx.stroke();
+  ctx.save(); shape(); ctx.clip();
+  ctx.fillStyle = 'rgba(30,20,15,.6)'; for (const [cx, cy, cr] of [[-0.3, 0.1, 0.18], [0.25, -0.25, 0.14], [0.2, 0.35, 0.12]]) { ctx.beginPath(); ctx.arc(cx * r, cy * r, cr * r, 0, 7); ctx.fill(); }
+  ctx.strokeStyle = '#ffb347'; ctx.lineWidth = 0.04 * S; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(r * 0.7, -r * 0.2); ctx.lineTo(r * 0.25, r * 0.05); ctx.lineTo(r * 0.35, r * 0.4); ctx.moveTo(r * 0.5, -r * 0.6); ctx.lineTo(r * 0.1, -r * 0.45); ctx.stroke();
+  const hot = ctx.createLinearGradient(r, -r, -r, r); hot.addColorStop(0, 'rgba(255,200,90,.85)'); hot.addColorStop(0.45, 'rgba(255,120,40,.25)'); hot.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = hot; ctx.fillRect(-r, -r, 2 * r, 2 * r);
+  ctx.restore();
+}
+function drawMeteor(ctx: CanvasRenderingContext2D, sim: Sim, m: import('./world').Meteor, X: (x: number) => number, Y: (y: number) => number, S: number, t: number) {
+  const gy = sim.groundY(m.x), sx = X(m.x), sy = Y(gy), p = 1 - m.t / 1.6, pulse = 0.5 + 0.5 * Math.sin(t * 18);
   const rx = 2.4 * S * (0.6 + 0.4 * (1 - p));
-  ctx.fillStyle = `rgba(0,0,0,${0.15 + 0.35 * p})`; ctx.beginPath(); ctx.ellipse(sx, sy + 3, rx * 0.6 * (0.4 + p), 9 + 6 * p, 0, 0, 7); ctx.fill();
+  // growing shadow + pulsing target ring
+  ctx.fillStyle = `rgba(0,0,0,${0.15 + 0.4 * p})`; ctx.beginPath(); ctx.ellipse(sx, sy + 3, rx * 0.55 * (0.3 + p), 7 + 8 * p, 0, 0, 7); ctx.fill();
   ctx.strokeStyle = `rgba(255,${70 + 90 * pulse | 0},60,${0.55 + 0.45 * pulse})`; ctx.lineWidth = 5; ctx.beginPath(); ctx.ellipse(sx, sy + 3, rx, rx * 0.22, 0, 0, 7); ctx.stroke();
-  ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(sx, sy + 3, rx * 0.45, rx * 0.1, 0, 0, 7); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(sx - rx * 1.15, sy + 3); ctx.lineTo(sx - rx * 0.8, sy + 3); ctx.moveTo(sx + rx * 0.8, sy + 3); ctx.lineTo(sx + rx * 1.15, sy + 3); ctx.stroke();
-  if (tl < 0.8) { const k = tl / 0.8, fx = sx + k * 300, fy = sy - k * 620;
-    const tg = ctx.createLinearGradient(fx, fy, fx + 90, fy - 190); tg.addColorStop(0, 'rgba(255,200,90,.9)'); tg.addColorStop(1, 'rgba(255,90,30,0)');
-    ctx.strokeStyle = tg; ctx.lineWidth = 22; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(fx, fy); ctx.lineTo(fx + 90, fy - 190); ctx.stroke();
-    const mg = ctx.createRadialGradient(fx, fy, 2, fx, fy, 40); mg.addColorStop(0, '#fff7cc'); mg.addColorStop(0.45, '#ff9a2e'); mg.addColorStop(1, 'rgba(255,60,0,0)'); ctx.fillStyle = mg; ctx.beginPath(); ctx.arc(fx, fy, 40, 0, 7); ctx.fill();
-    ctx.fillStyle = '#6a5446'; ctx.strokeStyle = '#3a2b22'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(fx, fy, 16, 0, 7); ctx.fill(); ctx.stroke(); ctx.fillStyle = '#8c7262'; ctx.beginPath(); ctx.arc(fx - 5, fy - 5, 6, 0, 7); ctx.fill(); }
+  ctx.lineWidth = 3; ctx.setLineDash([10, 8]); ctx.lineDashOffset = -t * 40; ctx.beginPath(); ctx.ellipse(sx, sy + 3, rx * 0.55, rx * 0.12, 0, 0, 7); ctx.stroke(); ctx.setLineDash([]);
+  const mp = sim.meteorPos(m); if (!mp) return;
+  ctx.save(); ctx.translate(X(mp.x), Y(mp.y)); ctx.rotate(t * 4);
+  blit(ctx, sprite('meteor', [-1.2, -1.2, 1.2, 1.2], meteorRock), 0, 0, 0, S);
+  ctx.restore();
 }
 
 function drawCoin(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, t: number) {
@@ -250,18 +270,35 @@ function drawCell(ctx: CanvasRenderingContext2D, x: number, y: number, S: number
   ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(x + 3, y - h * 0.3); ctx.lineTo(x - w * 0.22, y + 2); ctx.lineTo(x, y + 2); ctx.lineTo(x - 3, y + h * 0.3); ctx.lineTo(x + w * 0.22, y - 3); ctx.lineTo(x, y - 3); ctx.closePath(); ctx.fill();
 }
 
-function drawSlime(ctx: CanvasRenderingContext2D, q: { x: number; y: number; a: number }, phase: number, X: (x: number) => number, Y: (y: number) => number, S: number, roverX: number) {
-  const sq = 1 + Math.sin(phase) * 0.09, rx = 0.36 * S, ry = 0.29 * S, look = Math.sign(roverX - q.x) * 0.06 * S;
-  ctx.save(); ctx.translate(X(q.x), Y(q.y)); ctx.rotate(-q.a); ctx.scale(1 / sq, sq);
-  ctx.fillStyle = 'rgba(0,0,0,.2)'; ctx.beginPath(); ctx.ellipse(0, ry * 0.9, rx * 1.05, ry * 0.25, 0, 0, 7); ctx.fill();
-  ctx.fillStyle = '#7be05a'; ctx.beginPath(); ctx.ellipse(0, 2, rx, ry, 0, 0, 7); ctx.fill();
-  ctx.save(); ctx.clip(); ctx.fillStyle = '#46b034'; ctx.beginPath(); ctx.ellipse(rx * 0.15, ry * 0.75, rx * 1.1, ry * 0.7, 0, 0, 7); ctx.fill(); ctx.restore();
-  ctx.strokeStyle = '#2f7a22'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.ellipse(0, 2, rx, ry, 0, 0, 7); ctx.stroke();
-  ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.beginPath(); ctx.ellipse(-rx * 0.45, -ry * 0.35, rx * 0.22, ry * 0.14, -0.5, 0, 7); ctx.fill();
-  ctx.strokeStyle = '#2f7a22'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-rx * 0.25, -ry * 0.8); ctx.lineTo(-rx * 0.45, -ry * 1.6); ctx.moveTo(rx * 0.25, -ry * 0.8); ctx.lineTo(rx * 0.45, -ry * 1.6); ctx.stroke();
-  ctx.fillStyle = '#ff7fc4'; ctx.beginPath(); ctx.arc(-rx * 0.45, -ry * 1.6, 0.06 * S, 0, 7); ctx.arc(rx * 0.45, -ry * 1.6, 0.06 * S, 0, 7); ctx.fill();
-  for (const ex of [-0.3, 0.3]) { ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(ex * rx, -ry * 0.05, 0.085 * S, 0, 7); ctx.fill(); ctx.fillStyle = '#10200c'; ctx.beginPath(); ctx.arc(ex * rx + look * 0.4, -ry * 0.02, 0.045 * S, 0, 7); ctx.fill(); }
-  ctx.restore();
+/** jelly alien body (cached as a sprite); eyes are drawn live so they can blink and track the rover */
+function drawSlime(ctx: CanvasRenderingContext2D, S: number, angry = false) {
+  const rx = 0.38 * S, ry = 0.31 * S;
+  // antennae with glowing tips
+  ctx.strokeStyle = '#2f7a22'; ctx.lineWidth = 0.05 * S; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(-rx * 0.3, -ry * 0.7); ctx.quadraticCurveTo(-rx * 0.6, -ry * 1.4, -rx * 0.35, -ry * 1.75); ctx.moveTo(rx * 0.3, -ry * 0.7); ctx.quadraticCurveTo(rx * 0.6, -ry * 1.4, rx * 0.35, -ry * 1.75); ctx.stroke();
+  for (const ax of [-0.35, 0.35]) { const g = ctx.createRadialGradient(ax * rx, -ry * 1.78, 0, ax * rx, -ry * 1.78, 0.13 * S); g.addColorStop(0, '#fff'); g.addColorStop(0.35, angry ? '#ff5a5a' : '#ff7fc4'); g.addColorStop(1, 'rgba(255,127,196,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(ax * rx, -ry * 1.78, 0.13 * S, 0, 7); ctx.fill(); }
+  // body: translucent jelly with darker core and rim light
+  const body = () => { ctx.beginPath(); ctx.moveTo(-rx, ry * 0.75); ctx.bezierCurveTo(-rx * 1.15, -ry * 0.6, -rx * 0.5, -ry * 1.05, 0, -ry * 1.02); ctx.bezierCurveTo(rx * 0.5, -ry * 1.05, rx * 1.15, -ry * 0.6, rx, ry * 0.75); ctx.quadraticCurveTo(0, ry * 1.05, -rx, ry * 0.75); ctx.closePath(); };
+  body(); const g = ctx.createRadialGradient(-rx * 0.35, -ry * 0.45, rx * 0.1, 0, 0, rx * 1.25); g.addColorStop(0, angry ? '#c6ff8a' : '#b8ff86'); g.addColorStop(0.55, '#5fd64a'); g.addColorStop(1, '#2e9a2a'); ctx.fillStyle = g; ctx.fill();
+  ctx.save(); body(); ctx.clip(); ctx.fillStyle = 'rgba(20,90,20,.35)'; ctx.beginPath(); ctx.ellipse(rx * 0.1, ry * 0.85, rx * 1.1, ry * 0.5, 0, 0, 7); ctx.fill();
+  ctx.fillStyle = 'rgba(40,140,40,.45)'; ctx.beginPath(); ctx.arc(rx * 0.35, ry * 0.25, rx * 0.16, 0, 7); ctx.arc(-rx * 0.45, ry * 0.35, rx * 0.1, 0, 7); ctx.fill(); ctx.restore();
+  body(); ctx.strokeStyle = '#236b1d'; ctx.lineWidth = 2.5; ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,.7)'; ctx.beginPath(); ctx.ellipse(-rx * 0.5, -ry * 0.5, rx * 0.2, ry * 0.13, -0.6, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.arc(-rx * 0.25, -ry * 0.75, rx * 0.06, 0, 7); ctx.fill();
+  // mouth
+  ctx.strokeStyle = '#174a14'; ctx.lineWidth = 0.035 * S; ctx.beginPath(); if (angry) { ctx.moveTo(-rx * 0.2, ry * 0.42); ctx.lineTo(rx * 0.2, ry * 0.42); } else ctx.arc(0, ry * 0.25, rx * 0.2, 0.2, Math.PI - 0.2); ctx.stroke();
+}
+/** live eyes: blink + look at (lookX, lookY) in -1..1 */
+function slimeEyes(ctx: CanvasRenderingContext2D, x: number, y: number, S: number, lookX: number, blink: boolean, angry = false) {
+  const rx = 0.38 * S, ry = 0.31 * S, er = 0.1 * S;
+  for (const ex of [-0.32, 0.32]) {
+    const cx = x + ex * rx, cy = y - ry * 0.15;
+    if (blink) { ctx.strokeStyle = '#174a14'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(cx - er, cy); ctx.lineTo(cx + er, cy); ctx.stroke(); continue; }
+    ctx.fillStyle = '#fff'; ctx.strokeStyle = '#174a14'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(cx, cy, er, er * 1.15, 0, 0, 7); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#10200c'; ctx.beginPath(); ctx.arc(cx + lookX * er * 0.45, cy + er * 0.15, er * 0.55, 0, 7); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(cx + lookX * er * 0.45 - er * 0.2, cy - er * 0.1, er * 0.18, 0, 7); ctx.fill();
+    if (angry) { ctx.strokeStyle = '#174a14'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(cx - er * 1.1, cy - er * (ex < 0 ? 1.5 : 0.9)); ctx.lineTo(cx + er * 1.1, cy - er * (ex < 0 ? 0.9 : 1.5)); ctx.stroke(); }
+  }
 }
 
 const STENCIL = ['ring', 'arrow', 'star'];
@@ -312,34 +349,69 @@ function blit(ctx: CanvasRenderingContext2D, sp: Spr, x: number, y: number, ang:
 }
 const OUT = '#4a5366';
 function roverBody(ctx: CanvasRenderingContext2D, s: number) {
-  ctx.fillStyle = '#566074'; rr(ctx, -1.38 * s, 0.02 * s, 2.76 * s, 0.22 * s, 0.08 * s); ctx.fill();
-  ctx.fillStyle = '#3a4152'; ctx.fillRect(-1.5 * s, -0.02 * s, 0.16 * s, 0.12 * s); // exhaust
-  rr(ctx, -1.38 * s, -0.2 * s, 2.8 * s, 0.38 * s, 0.1 * s); ctx.fillStyle = '#f4f6fa'; ctx.fill();
-  ctx.save(); ctx.clip(); ctx.fillStyle = '#ccd3df'; ctx.fillRect(-1.4 * s, 0.05 * s, 2.9 * s, 0.2 * s);
-  ctx.fillStyle = '#ff7a2f'; ctx.fillRect(-1.4 * s, -0.08 * s, 2.9 * s, 0.1 * s); ctx.fillStyle = '#ffa262'; ctx.fillRect(-1.4 * s, -0.08 * s, 2.9 * s, 0.025 * s); ctx.restore();
-  ctx.strokeStyle = OUT; ctx.lineWidth = 2.5; rr(ctx, -1.38 * s, -0.2 * s, 2.8 * s, 0.38 * s, 0.1 * s); ctx.stroke();
-  ctx.fillStyle = '#ff3b3b'; ctx.fillRect(-1.41 * s, -0.14 * s, 0.06 * s, 0.1 * s);
-  // bumper plate (grows with bumper upgrade)
-  const bp = 0.1 + 0.04 * save.up.bumper; ctx.fillStyle = '#8a93a6'; ctx.beginPath(); ctx.moveTo(1.4 * s, -0.16 * s); ctx.lineTo((1.42 + bp) * s, 0); ctx.lineTo(1.4 * s, 0.2 * s); ctx.closePath(); ctx.fill(); ctx.strokeStyle = OUT; ctx.stroke();
+  // chassis frame + exhaust
+  ctx.fillStyle = '#3e4656'; rr(ctx, -1.36 * s, 0.0, 2.72 * s, 0.24 * s, 0.08 * s); ctx.fill();
+  ctx.fillStyle = '#2b313d'; rr(ctx, -1.58 * s, 0.02 * s, 0.26 * s, 0.09 * s, 0.04 * s); ctx.fill();
+  // deck panel with vertical shading
+  const deck = () => { ctx.beginPath(); ctx.moveTo(-1.4 * s, -0.2 * s); ctx.lineTo(1.36 * s, -0.2 * s); ctx.quadraticCurveTo(1.47 * s, -0.2 * s, 1.47 * s, -0.08 * s); ctx.lineTo(1.43 * s, 0.14 * s); ctx.quadraticCurveTo(1.4 * s, 0.2 * s, 1.3 * s, 0.2 * s); ctx.lineTo(-1.32 * s, 0.2 * s); ctx.quadraticCurveTo(-1.42 * s, 0.2 * s, -1.42 * s, 0.1 * s); ctx.closePath(); };
+  deck(); const g = ctx.createLinearGradient(0, -0.2 * s, 0, 0.2 * s); g.addColorStop(0, '#ffffff'); g.addColorStop(0.55, '#eef1f6'); g.addColorStop(1, '#c4ccd9'); ctx.fillStyle = g; ctx.fill();
+  ctx.save(); deck(); ctx.clip();
+  ctx.fillStyle = '#ff7a2f'; ctx.fillRect(-1.5 * s, -0.09 * s, 3 * s, 0.11 * s); ctx.fillStyle = '#ffa766'; ctx.fillRect(-1.5 * s, -0.09 * s, 3 * s, 0.025 * s); ctx.fillStyle = '#c9551a'; ctx.fillRect(-1.5 * s, 0.0, 3 * s, 0.02 * s);
+  // hazard chevrons on the tail
+  for (let i = 0; i < 3; i++) { ctx.fillStyle = i % 2 ? '#1f2430' : '#ffc53d'; ctx.beginPath(); ctx.moveTo((-1.42 + i * 0.07) * s, 0.06 * s); ctx.lineTo((-1.35 + i * 0.07) * s, 0.06 * s); ctx.lineTo((-1.3 + i * 0.07) * s, 0.2 * s); ctx.lineTo((-1.37 + i * 0.07) * s, 0.2 * s); ctx.fill(); }
+  ctx.restore();
+  deck(); ctx.strokeStyle = OUT; ctx.lineWidth = 2.5; ctx.stroke();
+  ctx.fillStyle = '#8f99ab'; for (let x = -1.1; x < 1.3; x += 0.32) { ctx.beginPath(); ctx.arc(x * s, -0.14 * s, 0.018 * s, 0, 7); ctx.fill(); }
+  // wheel fender arches
+  for (const wx of [-0.95, 0.95]) {
+    ctx.fillStyle = '#39404f'; ctx.beginPath(); ctx.arc(wx * s, 0.42 * s, 0.6 * s, Math.PI + 0.55, -0.55); ctx.arc(wx * s, 0.42 * s, 0.5 * s, -0.6, Math.PI + 0.6, true); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = '#5b6578'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(wx * s, 0.42 * s, 0.6 * s, Math.PI + 0.6, -0.6); ctx.stroke();
+  }
+  // tail light with glow
+  const tl = ctx.createRadialGradient(-1.43 * s, -0.12 * s, 0, -1.43 * s, -0.12 * s, 0.16 * s); tl.addColorStop(0, 'rgba(255,80,80,.9)'); tl.addColorStop(1, 'rgba(255,60,60,0)'); ctx.fillStyle = tl; ctx.beginPath(); ctx.arc(-1.43 * s, -0.12 * s, 0.16 * s, 0, 7); ctx.fill();
+  ctx.fillStyle = '#ff3b3b'; ctx.strokeStyle = '#7a1414'; ctx.lineWidth = 1.5; rr(ctx, -1.46 * s, -0.17 * s, 0.06 * s, 0.1 * s, 2); ctx.fill(); ctx.stroke();
+  // front bumper / plow (grows with the bumper upgrade)
+  const bp = 0.1 + 0.05 * save.up.bumper, pg = ctx.createLinearGradient(0, -0.2 * s, 0, 0.24 * s); pg.addColorStop(0, '#c3cad6'); pg.addColorStop(1, '#6c7586');
+  ctx.fillStyle = pg; ctx.beginPath(); ctx.moveTo(1.42 * s, -0.18 * s); ctx.lineTo((1.46 + bp) * s, -0.02 * s); ctx.lineTo((1.42 + bp * 0.8) * s, 0.22 * s); ctx.lineTo(1.38 * s, 0.22 * s); ctx.closePath(); ctx.fill(); ctx.strokeStyle = OUT; ctx.lineWidth = 2; ctx.stroke();
+  ctx.fillStyle = '#3e4656'; ctx.beginPath(); ctx.arc((1.44 + bp * 0.4) * s, 0.02 * s, 0.025 * s, 0, 7); ctx.arc((1.42 + bp * 0.35) * s, 0.14 * s, 0.025 * s, 0, 7); ctx.fill();
 }
 function roverCab(ctx: CanvasRenderingContext2D, s: number, bedH: number) {
-  for (const wx of [-1.33, 0.48]) { ctx.fillStyle = '#e8ecf3'; ctx.strokeStyle = OUT; ctx.lineWidth = 2; rr(ctx, (wx - 0.06) * s, -(0.18 + bedH) * s, 0.12 * s, bedH * s, 0.03 * s); ctx.fill(); ctx.stroke(); ctx.fillStyle = '#ff7a2f'; ctx.fillRect((wx - 0.06) * s, -(0.18 + bedH) * s, 0.12 * s, 0.07 * s); }
-  const cab = () => { ctx.beginPath(); ctx.moveTo(0.52 * s, -0.16 * s); ctx.lineTo(0.52 * s, -0.8 * s); ctx.quadraticCurveTo(0.52 * s, -0.92 * s, 0.64 * s, -0.92 * s); ctx.lineTo(1.04 * s, -0.92 * s); ctx.lineTo(1.42 * s, -0.5 * s); ctx.lineTo(1.42 * s, -0.16 * s); ctx.closePath(); };
-  cab(); ctx.fillStyle = '#f4f6fa'; ctx.fill();
-  ctx.save(); cab(); ctx.clip(); ctx.fillStyle = '#d3d9e4'; ctx.fillRect(0.52 * s, -0.36 * s, s, 0.22 * s); ctx.fillRect(1.25 * s, -1 * s, 0.3 * s, s);
-  ctx.fillStyle = '#ff7a2f'; ctx.fillRect(0.5 * s, -0.42 * s, s, 0.08 * s); ctx.restore();
+  // bed posts with cross bars
+  for (const wx of [-1.33, 0.48]) {
+    const pg = ctx.createLinearGradient((wx - 0.06) * s, 0, (wx + 0.06) * s, 0); pg.addColorStop(0, '#f6f8fb'); pg.addColorStop(1, '#b9c1cd');
+    ctx.fillStyle = pg; ctx.strokeStyle = OUT; ctx.lineWidth = 2; rr(ctx, (wx - 0.06) * s, -(0.18 + bedH) * s, 0.12 * s, bedH * s, 0.03 * s); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#ff7a2f'; rr(ctx, (wx - 0.07) * s, -(0.2 + bedH) * s, 0.14 * s, 0.08 * s, 0.02 * s); ctx.fill(); ctx.stroke();
+  }
+  // roll bar behind the cab
+  ctx.strokeStyle = '#59627a'; ctx.lineWidth = 0.06 * s; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(0.5 * s, -0.2 * s); ctx.lineTo(0.47 * s, -0.98 * s); ctx.quadraticCurveTo(0.5 * s, -1.06 * s, 0.62 * s, -1.02 * s); ctx.stroke();
+  const cab = () => { ctx.beginPath(); ctx.moveTo(0.52 * s, -0.16 * s); ctx.lineTo(0.52 * s, -0.8 * s); ctx.quadraticCurveTo(0.52 * s, -0.94 * s, 0.66 * s, -0.94 * s); ctx.lineTo(1.02 * s, -0.94 * s); ctx.quadraticCurveTo(1.08 * s, -0.94 * s, 1.12 * s, -0.88 * s); ctx.lineTo(1.42 * s, -0.52 * s); ctx.quadraticCurveTo(1.45 * s, -0.48 * s, 1.45 * s, -0.42 * s); ctx.lineTo(1.45 * s, -0.16 * s); ctx.closePath(); };
+  cab(); const cg = ctx.createLinearGradient(0.52 * s, -0.94 * s, 1.45 * s, -0.16 * s); cg.addColorStop(0, '#ffffff'); cg.addColorStop(0.6, '#eef1f6'); cg.addColorStop(1, '#c2cad8'); ctx.fillStyle = cg; ctx.fill();
+  ctx.save(); cab(); ctx.clip(); ctx.fillStyle = '#ff7a2f'; ctx.fillRect(0.5 * s, -0.42 * s, s, 0.09 * s); ctx.fillStyle = '#c9551a'; ctx.fillRect(0.5 * s, -0.34 * s, s, 0.015 * s); ctx.restore();
   cab(); ctx.strokeStyle = OUT; ctx.lineWidth = 2.5; ctx.stroke();
-  // windshield with driver helmet + reflection
-  const win = () => { ctx.beginPath(); ctx.moveTo(0.7 * s, -0.84 * s); ctx.lineTo(1.0 * s, -0.84 * s); ctx.lineTo(1.33 * s, -0.5 * s); ctx.lineTo(0.7 * s, -0.5 * s); ctx.closePath(); };
-  win(); const wg = ctx.createLinearGradient(0, -0.84 * s, 0, -0.5 * s); wg.addColorStop(0, '#c9f2ff'); wg.addColorStop(1, '#3d8fd0'); ctx.fillStyle = wg; ctx.fill();
+  // door seam + handle
+  ctx.strokeStyle = 'rgba(74,83,102,.55)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(0.92 * s, -0.48 * s); ctx.lineTo(0.92 * s, -0.18 * s); ctx.stroke(); ctx.fillStyle = '#7b8496'; ctx.fillRect(0.8 * s, -0.3 * s, 0.08 * s, 0.025 * s);
+  // side window
+  ctx.fillStyle = '#2a4d73'; rr(ctx, 0.58 * s, -0.86 * s, 0.22 * s, 0.3 * s, 0.04 * s); ctx.fill(); ctx.strokeStyle = OUT; ctx.lineWidth = 2; ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.beginPath(); ctx.moveTo(0.62 * s, -0.84 * s); ctx.lineTo(0.7 * s, -0.84 * s); ctx.lineTo(0.62 * s, -0.7 * s); ctx.closePath(); ctx.fill();
+  // windshield with driver + reflections
+  const win = () => { ctx.beginPath(); ctx.moveTo(0.86 * s, -0.86 * s); ctx.lineTo(1.04 * s, -0.86 * s); ctx.lineTo(1.36 * s, -0.5 * s); ctx.lineTo(0.86 * s, -0.5 * s); ctx.closePath(); };
+  win(); const wg = ctx.createLinearGradient(0, -0.86 * s, 0, -0.5 * s); wg.addColorStop(0, '#d4f6ff'); wg.addColorStop(1, '#3a86c8'); ctx.fillStyle = wg; ctx.fill();
   ctx.save(); win(); ctx.clip();
-  ctx.fillStyle = '#eef1f6'; ctx.beginPath(); ctx.arc(0.92 * s, -0.6 * s, 0.15 * s, 0, 7); ctx.fill(); ctx.fillStyle = '#1d3557'; ctx.beginPath(); ctx.ellipse(0.98 * s, -0.61 * s, 0.09 * s, 0.075 * s, 0, 0, 7); ctx.fill();
-  ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.beginPath(); ctx.moveTo(0.95 * s, -0.86 * s); ctx.lineTo(1.05 * s, -0.86 * s); ctx.lineTo(0.85 * s, -0.48 * s); ctx.lineTo(0.75 * s, -0.48 * s); ctx.closePath(); ctx.fill();
-  ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.beginPath(); ctx.moveTo(1.12 * s, -0.86 * s); ctx.lineTo(1.16 * s, -0.86 * s); ctx.lineTo(0.98 * s, -0.48 * s); ctx.lineTo(0.94 * s, -0.48 * s); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#ff7a2f'; ctx.beginPath(); ctx.ellipse(1.0 * s, -0.44 * s, 0.16 * s, 0.1 * s, 0, 0, 7); ctx.fill(); // suit shoulders
+  const hg2 = ctx.createRadialGradient(0.97 * s, -0.66 * s, 0.02 * s, 1.0 * s, -0.62 * s, 0.16 * s); hg2.addColorStop(0, '#ffffff'); hg2.addColorStop(1, '#c9d0dc'); ctx.fillStyle = hg2; ctx.beginPath(); ctx.arc(1.0 * s, -0.62 * s, 0.15 * s, 0, 7); ctx.fill();
+  ctx.fillStyle = '#1d3557'; ctx.beginPath(); ctx.ellipse(1.06 * s, -0.62 * s, 0.09 * s, 0.075 * s, 0, 0, 7); ctx.fill(); ctx.fillStyle = 'rgba(255,200,120,.75)'; ctx.beginPath(); ctx.ellipse(1.09 * s, -0.65 * s, 0.03 * s, 0.02 * s, 0, 0, 7); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.beginPath(); ctx.moveTo(1.0 * s, -0.88 * s); ctx.lineTo(1.1 * s, -0.88 * s); ctx.lineTo(0.92 * s, -0.48 * s); ctx.lineTo(0.82 * s, -0.48 * s); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.3)'; ctx.beginPath(); ctx.moveTo(1.16 * s, -0.88 * s); ctx.lineTo(1.2 * s, -0.88 * s); ctx.lineTo(1.04 * s, -0.48 * s); ctx.lineTo(1.0 * s, -0.48 * s); ctx.closePath(); ctx.fill();
   ctx.restore(); win(); ctx.strokeStyle = OUT; ctx.lineWidth = 2; ctx.stroke();
-  ctx.fillStyle = '#fff6c8'; ctx.strokeStyle = OUT; ctx.lineWidth = 2; rr(ctx, 1.36 * s, -0.36 * s, 0.08 * s, 0.14 * s, 3); ctx.fill(); ctx.stroke();
-  ctx.fillStyle = '#3a4152'; ctx.fillRect(0.66 * s, -0.98 * s, 0.32 * s, 0.06 * s);
-  ctx.strokeStyle = '#5b6476'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(0.64 * s, -0.92 * s); ctx.lineTo(0.55 * s, -1.42 * s); ctx.stroke();
+  // mirror
+  ctx.fillStyle = '#3e4656'; ctx.fillRect(1.4 * s, -0.62 * s, 0.04 * s, 0.08 * s); ctx.fillStyle = '#9fd6ff'; ctx.strokeStyle = OUT; ctx.lineWidth = 1.5; rr(ctx, 1.42 * s, -0.72 * s, 0.07 * s, 0.11 * s, 2); ctx.fill(); ctx.stroke();
+  // headlight with chrome ring
+  ctx.fillStyle = '#c3cad6'; ctx.strokeStyle = OUT; ctx.lineWidth = 2; rr(ctx, 1.39 * s, -0.38 * s, 0.09 * s, 0.17 * s, 4); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#fff8d8'; rr(ctx, 1.41 * s, -0.36 * s, 0.06 * s, 0.13 * s, 3); ctx.fill();
+  // roof: light bar + amber beacon
+  ctx.fillStyle = '#3a4152'; rr(ctx, 0.64 * s, -1.0 * s, 0.36 * s, 0.07 * s, 3); ctx.fill();
+  for (let i = 0; i < 3; i++) { ctx.fillStyle = '#fff3b0'; ctx.fillRect((0.68 + i * 0.1) * s, -0.985 * s, 0.07 * s, 0.035 * s); }
+  ctx.strokeStyle = '#5b6476'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(0.6 * s, -0.94 * s); ctx.lineTo(0.55 * s, -1.42 * s); ctx.stroke();
 }
 
 function drawRover(ctx: CanvasRenderingContext2D, sim: Sim, a: number, X: (x: number) => number, Y: (y: number) => number, S: number, t: number) {
@@ -359,15 +431,19 @@ function drawRover(ctx: CanvasRenderingContext2D, sim: Sim, a: number, X: (x: nu
     for (let k = 0; k <= N * 2; k++) { const f = k / (N * 2), yy = top + len * (0.1 + f * 0.65), xx = ax * S + (sx - ax * S) * f + (k % 2 ? 1 : -1) * 0.13 * S; k ? ctx.lineTo(xx, yy) : ctx.moveTo(xx, yy); } ctx.stroke();
   }
   ctx.restore();
-  const wheel = sprite('wheel', [-0.5, -0.5, 0.5, 0.5], (g, s) => drawWheel(g, 0, 0, 0, s, false));
-  for (let i = 0; i < 2; i++) { const w = interp(sim.wheels[i], a); blit(ctx, wheel, X(w.x), Y(w.y), w.a, S); if (sim.stickT > 0) drawGoo(ctx, X(w.x), Y(w.y), w.a, S); }
-  blit(ctx, sprite('body:' + save.up.bumper, [-1.56, -0.26, 1.8, 0.3], roverBody), cx, cy, ch.a, S);
+  const wheel = sprite('wheel2', [-0.52, -0.52, 0.52, 0.52], (g, s) => drawWheel(g, 0, 0, 0, s, false));
+  const fast = Math.abs(sim.speed) > 7;
+  for (let i = 0; i < 2; i++) { const w = interp(sim.wheels[i], a), wx = X(w.x), wy = Y(w.y); blit(ctx, wheel, wx, wy, w.a, S); if (sim.latched.length) drawGoo(ctx, wx, wy, w.a, S);
+    if (fast) { ctx.strokeStyle = 'rgba(30,33,41,.35)'; ctx.lineWidth = 0.1 * S; ctx.beginPath(); ctx.arc(wx, wy, 0.33 * S, w.a * -1, w.a * -1 + 2); ctx.stroke(); } }
+  blit(ctx, sprite('body2:' + save.up.bumper, [-1.62, -0.26, 1.9, 0.48], roverBody), cx, cy, ch.a, S);
   for (const c of sim.crates) { if (c.gone) continue; const q = interp(c.body, a), h = sim.crateHalf;
     const sp = sprite(`crate:${c.glass ? 'g' : c.idx % 3}:${h}`, [-h - 0.03, -h - 0.03, h + 0.03, h + 0.03], (g, s) => drawCrate(g, { ...c, lost: false, half: h }, 0, 0, 0, s, 0));
     if (c.lost) ctx.globalAlpha = 0.8; blit(ctx, sp, X(q.x), Y(q.y), q.a, S); ctx.globalAlpha = 1; }
-  blit(ctx, sprite('cab:' + sim.wallH.toFixed(3), [-1.45, -1.48, 1.48, -0.1], (g, s) => roverCab(g, s, sim.wallH)), cx, cy, ch.a, S);
-  // blinking antenna light + shield bubble
+  blit(ctx, sprite('cab2:' + sim.wallH.toFixed(3), [-1.45, -1.48, 1.55, -0.1], (g, s) => roverCab(g, s, sim.wallH)), cx, cy, ch.a, S);
+  // blinking antenna light, latched slimes, shield bubble
   ctx.save(); ctx.translate(cx, cy); ctx.rotate(-ch.a); const s = S, on = Math.sin(t * 6) > 0;
+  const lsp = sprite('slime', [-0.5, -0.75, 0.5, 0.42], (g, sz) => drawSlime(g, sz));
+  for (const l of sim.latched) { const wob = 1 + Math.sin(l.phase) * 0.08, lx = l.lx * s, ly = -l.ly * s - 0.12 * s; blit(ctx, lsp, lx, ly, 0, s * 0.8, 1 / wob, wob); slimeEyes(ctx, lx, ly, s * 0.8, -1, Math.sin(l.phase * 0.3) > 0.97, true); }
   if (on) { ctx.fillStyle = 'rgba(255,90,90,.35)'; ctx.beginPath(); ctx.arc(0.55 * s, -1.42 * s, 0.18 * s, 0, 7); ctx.fill(); }
   ctx.fillStyle = on ? '#ff4a4a' : '#7a2020'; ctx.beginPath(); ctx.arc(0.55 * s, -1.42 * s, 0.055 * s, 0, 7); ctx.fill();
   if (sim.shields > 0 || sim.shieldFlash > 0) { const f = sim.shieldFlash; ctx.strokeStyle = `rgba(110,220,255,${0.28 + 0.14 * Math.sin(t * 4) + f * 0.6})`; ctx.lineWidth = 2.5 + f * 6; ctx.fillStyle = `rgba(110,220,255,${0.05 + f * 0.2})`; ctx.beginPath(); ctx.ellipse(0, -0.4 * s, 1.85 * s, 1.15 * s, 0, 0, 7); ctx.fill(); ctx.stroke(); }
@@ -378,18 +454,20 @@ function drawGoo(ctx: CanvasRenderingContext2D, x: number, y: number, ang: numbe
   for (let k = 0; k < 3; k++) { const an = k * 2.1 - ang; ctx.beginPath(); ctx.arc(x + Math.cos(an) * r * 0.85, y + Math.sin(an) * r * 0.85, r * 0.22, 0, 7); ctx.fill(); }
 }
 
-function drawWheel(ctx: CanvasRenderingContext2D, x: number, y: number, ang: number, S: number, goo: boolean) {
+function drawWheel(ctx: CanvasRenderingContext2D, x: number, y: number, ang: number, S: number, _goo: boolean) {
   const r = 0.42 * S;
   ctx.save(); ctx.translate(x, y); ctx.rotate(-ang);
-  ctx.fillStyle = '#2b2f39'; for (let k = 0; k < 14; k++) { ctx.save(); ctx.rotate(k / 14 * Math.PI * 2); ctx.fillRect(r - 0.05 * S, -0.055 * S, 0.09 * S, 0.11 * S); ctx.restore(); }
-  ctx.fillStyle = '#3d4250'; ctx.beginPath(); ctx.arc(0, 0, r - 0.03 * S, 0, 7); ctx.fill();
-  ctx.strokeStyle = '#4c5262'; ctx.lineWidth = 0.05 * S; ctx.beginPath(); ctx.arc(0, 0, r * 0.75, 0, 7); ctx.stroke();
-  ctx.fillStyle = '#eef1f6'; ctx.beginPath(); ctx.arc(0, 0, r * 0.55, 0, 7); ctx.fill();
-  ctx.fillStyle = '#b9c1cd'; ctx.beginPath(); ctx.arc(0, 0, r * 0.55, 0.3, Math.PI - 0.3); ctx.fill();
-  ctx.strokeStyle = '#8a93a6'; ctx.lineWidth = 3; for (let k = 0; k < 5; k++) { const an = k / 5 * Math.PI * 2; ctx.beginPath(); ctx.moveTo(Math.cos(an) * r * 0.2, Math.sin(an) * r * 0.2); ctx.lineTo(Math.cos(an) * r * 0.5, Math.sin(an) * r * 0.5); ctx.stroke(); }
+  // chunky tread blocks
+  ctx.fillStyle = '#23262e'; ctx.strokeStyle = '#14161b'; ctx.lineWidth = 1.5;
+  for (let k = 0; k < 16; k++) { ctx.save(); ctx.rotate(k / 16 * Math.PI * 2); rr(ctx, r - 0.06 * S, -0.06 * S, 0.1 * S, 0.12 * S, 0.02 * S); ctx.fill(); ctx.stroke(); ctx.restore(); }
+  const tg = ctx.createRadialGradient(-r * 0.3, -r * 0.3, r * 0.2, 0, 0, r); tg.addColorStop(0, '#4d5363'); tg.addColorStop(1, '#2b2f39'); ctx.fillStyle = tg; ctx.beginPath(); ctx.arc(0, 0, r - 0.03 * S, 0, 7); ctx.fill();
+  ctx.strokeStyle = '#575e70'; ctx.lineWidth = 0.035 * S; ctx.beginPath(); ctx.arc(0, 0, r * 0.8, 0, 7); ctx.stroke();
+  // rim with 6 spokes
+  const rg = ctx.createLinearGradient(-r * 0.6, -r * 0.6, r * 0.6, r * 0.6); rg.addColorStop(0, '#ffffff'); rg.addColorStop(1, '#a9b2c0'); ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(0, 0, r * 0.6, 0, 7); ctx.fill();
+  ctx.fillStyle = '#3d4250'; for (let k = 0; k < 6; k++) { const a0 = k / 6 * Math.PI * 2 + 0.28; ctx.beginPath(); ctx.moveTo(Math.cos(a0) * r * 0.24, Math.sin(a0) * r * 0.24); ctx.arc(0, 0, r * 0.48, a0, a0 + 0.5); ctx.closePath(); ctx.fill(); }
+  ctx.strokeStyle = '#6c7586'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, r * 0.6, 0, 7); ctx.stroke();
   ctx.fillStyle = '#ff7a2f'; ctx.strokeStyle = '#b84e12'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, r * 0.2, 0, 7); ctx.fill(); ctx.stroke();
-  ctx.strokeStyle = '#1e2129'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(0, 0, r + 0.03 * S, 0, 7); ctx.stroke();
-  if (goo) { ctx.fillStyle = 'rgba(123,224,90,.85)'; for (let k = 0; k < 3; k++) { ctx.beginPath(); ctx.arc(Math.cos(k * 2.1) * r * 0.85, Math.sin(k * 2.1) * r * 0.85, r * 0.22, 0, 7); ctx.fill(); } }
+  ctx.fillStyle = '#7a3a10'; for (let k = 0; k < 5; k++) { const a0 = k / 5 * Math.PI * 2; ctx.beginPath(); ctx.arc(Math.cos(a0) * r * 0.12, Math.sin(a0) * r * 0.12, 0.018 * S, 0, 7); ctx.fill(); }
   ctx.restore();
 }
 
@@ -447,4 +525,30 @@ function drawOutpost(ctx: CanvasRenderingContext2D, sim: Sim, X: (x: number) => 
 
 export function rr(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
   ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
+
+/** Static rover for menus (title, garage, map marker). x,y = chassis centre in screen px, S = px per metre. */
+export function drawRoverPreview(ctx: CanvasRenderingContext2D, x: number, y: number, S: number, t: number, crates = 3, bedH = 0.4 + 0.0625 * save.up.bed) {
+  const bob = Math.sin(t * 3) * 0.015 * S;
+  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(x, y + 0.86 * S, 1.7 * S, 0.14 * S, 0, 0, 7); ctx.fill();
+  const wheel = sprite('wheel2', [-0.52, -0.52, 0.52, 0.52], (g, s) => drawWheel(g, 0, 0, 0, s, false));
+  for (const wx of [-0.95, 0.95]) { ctx.strokeStyle = '#3a4152'; ctx.lineWidth = 0.08 * S; ctx.beginPath(); ctx.moveTo(x + wx * S, y + bob); ctx.lineTo(x + wx * S, y + 0.42 * S); ctx.stroke(); blit(ctx, wheel, x + wx * S, y + 0.42 * S, -t * 2, S); }
+  blit(ctx, sprite('body2:' + save.up.bumper, [-1.62, -0.26, 1.9, 0.48], roverBody), x, y + bob, 0, S);
+  const h = crates >= 4 ? 0.2 : CRATE_HALF_UI, n = Math.min(crates, 4), gap = (1.69 - n * 2 * h) / (n + 1);
+  for (let i = 0; i < n; i++) { const cx = -1.27 + gap + h + i * (2 * h + gap); blit(ctx, sprite(`crate:${i % 3}:${h}`, [-h - 0.03, -h - 0.03, h + 0.03, h + 0.03], (g, s) => drawCrate(g, { body: null as never, idx: i, glass: false, lost: false, gone: false, lostT: 0, warned: 0, half: h }, 0, 0, 0, s, 0)), x + cx * S, y + bob - (0.18 + h) * S, 0, S); }
+  blit(ctx, sprite('cab2:' + bedH.toFixed(3), [-1.45, -1.48, 1.55, -0.1], (g, s) => roverCab(g, s, bedH)), x, y + bob, 0, S);
+  const on = Math.sin(t * 6) > 0; ctx.fillStyle = on ? '#ff4a4a' : '#7a2020'; ctx.beginPath(); ctx.arc(x + 0.55 * S, y + bob - 1.42 * S, 0.055 * S, 0, 7); ctx.fill();
+}
+const CRATE_HALF_UI = 0.22;
+
+/** Build every sprite a run can need up front, so nothing is generated mid-drive (no first-appearance hitches). */
+export function warmSprites(sim: Sim) {
+  sprite('wheel2', [-0.52, -0.52, 0.52, 0.52], (g, s) => drawWheel(g, 0, 0, 0, s, false));
+  sprite('body2:' + save.up.bumper, [-1.62, -0.26, 1.9, 0.48], roverBody);
+  sprite('cab2:' + sim.wallH.toFixed(3), [-1.45, -1.48, 1.55, -0.1], (g, s) => roverCab(g, s, sim.wallH));
+  sprite('slime', [-0.5, -0.75, 0.5, 0.42], (g, sz) => drawSlime(g, sz));
+  sprite('meteor', [-1.2, -1.2, 1.2, 1.2], meteorRock);
+  sprite('coin', [-0.33, -0.33, 0.33, 0.36], (g, s) => drawCoin(g, 0, 0, 0.27 * s, 0));
+  const h = sim.crateHalf;
+  for (const c of sim.crates) sprite(`crate:${c.glass ? 'g' : c.idx % 3}:${h}`, [-h - 0.03, -h - 0.03, h + 0.03, h + 0.03], (g, s) => drawCrate(g, { ...c, lost: false, half: h }, 0, 0, 0, s, 0));
 }

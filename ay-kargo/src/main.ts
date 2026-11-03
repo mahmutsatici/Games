@@ -5,7 +5,7 @@ import { loadSave, save, persist, buy, upgradeCost, UPGRADES, MAX_LEVEL, starsOf
 import { initAudio, setMuted, setAdMuted, isMuted, engine, ufoHum, wind, sfx } from './game/audio';
 import { WORLDS, makeLevel, LevelDef } from './game/levels';
 import { Sim, Input } from './game/world';
-import { Camera, drawWorld, backdrop, skyCss, setPixelScale, W, H, rr } from './game/render';
+import { Camera, drawWorld, backdrop, skyCss, setPixelScale, drawRoverPreview, warmSprites, W, H, rr } from './game/render';
 import { buttons, resetButtons, button, hit, text, panel, icon, Icon, Tone } from './game/ui';
 
 type Scene = 'title' | 'map' | 'pre' | 'drive' | 'result' | 'garage' | 'daily' | 'recharge';
@@ -18,7 +18,8 @@ let sim: Sim | null = null; const cam = new Camera();
 let demo: Sim | null = null; const demoCam = new Camera();
 let paused = false, adBusy = false, doubled = false, earned = 0, shown = 0, newBest = false, dailyShown = false, dailyMsg = 0, flashT = 0;
 let coinShown = 0, coinPop = 0;
-const keys: Record<string, boolean> = {}; const touches = new Map<number, 'gas' | 'brake' | 'turbo'>();
+type Pad = 'gas' | 'brake' | 'turbo' | 'tiltL' | 'tiltR';
+const keys: Record<string, boolean> = {}; const touches = new Map<number, Pad>();
 let touchUI = matchMedia('(pointer: coarse)').matches;
 let usedKeys = false;
 
@@ -37,16 +38,21 @@ function adaptResolution(dt: number) {
   // react to the share of slow frames (not the average, which vsync jitter inflates); hold 2.5 s between steps
   perfT += dt; if (!adaptOn || perfT < 2.5 || frameTimes.length < 90 || scene !== 'drive' || paused) return;
   const recent = frameTimes.slice(-90), slow = recent.filter(x => x > 25).length / recent.length;
-  if (slow > 0.12 && renderScale > 0.55) { renderScale = Math.max(0.55, Math.round((renderScale - 0.15) * 100) / 100); resize(); perfT = 0; }
-  else if (slow < 0.01 && renderScale < 1) { renderScale = Math.min(1, Math.round((renderScale + 0.1) * 100) / 100); resize(); perfT = -3; }
+  // only ever steps down (each resize costs a hitch, so never oscillate) and never below 0.7
+  if (slow > 0.2 && renderScale > 0.7) { renderScale = Math.max(0.7, Math.round((renderScale - 0.15) * 100) / 100); resize(); perfT = -5; }
 }
 window.addEventListener('resize', resize); resize();
 const cssScale = () => canvas.getBoundingClientRect().width / W || 1;
 const toLogical = (e: PointerEvent) => { const r = canvas.getBoundingClientRect(); return { x: (e.clientX - r.left) / r.width * W, y: (e.clientY - r.top) / r.height * H }; };
 /** touch pedals: ~90 css px, never smaller than 100 logical px */
+/** left thumb: tilt back / tilt forward; right thumb: brake, gas, turbo above gas */
 function pedals() {
-  const sz = Math.max(100, Math.min(190, 90 / cssScale())), m = 22;
-  return { sz, brake: { x: m + sz / 2, y: H - m - sz / 2 }, gas: { x: W - m - sz / 2, y: H - m - sz / 2 }, turbo: { x: W - m - sz / 2, y: H - m - sz * 1.42, r: sz * 0.4 } };
+  const sz = Math.max(100, Math.min(180, 88 / cssScale())), m = 22, r = sz / 2, y = H - m - r;
+  const P: Record<Pad, { x: number; y: number; r: number }> = {
+    tiltL: { x: m + r, y, r }, tiltR: { x: m + r * 3 + 16, y, r },
+    brake: { x: W - m - r * 3 - 16, y, r }, gas: { x: W - m - r, y, r }, turbo: { x: W - m - r, y: y - r * 2 - 14, r: r * 0.8 },
+  };
+  return P;
 }
 
 // ---------- input ----------
@@ -60,15 +66,18 @@ canvas.addEventListener('pointerdown', e => { initAudio(); canvas.focus(); if (e
   if (hit(p.x, p.y)) { sfx.click(); return; }
   if (scene === 'title') { go('map'); return; }
   if (scene === 'drive' && !paused) {
-    const P = pedals(); const zone = touchUI && Math.hypot(p.x - P.turbo.x, p.y - P.turbo.y) < P.turbo.r * 1.25 ? 'turbo' : p.x < W / 2 ? 'brake' : 'gas';
-    touches.set(e.pointerId, zone); canvas.setPointerCapture(e.pointerId);
+    // nearest pedal on the touched half of the screen
+    const P = pedals(); let best: Pad = p.x < W / 2 ? 'tiltL' : 'gas', bd = 1e9;
+    for (const k of Object.keys(P) as Pad[]) { if ((P[k].x < W / 2) !== (p.x < W / 2)) continue; const d = Math.hypot(p.x - P[k].x, p.y - P[k].y) / P[k].r; if (d < bd) { bd = d; best = k; } }
+    touches.set(e.pointerId, best); canvas.setPointerCapture(e.pointerId);
   } });
 const up = (e: PointerEvent) => { touches.delete(e.pointerId); };
 canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', up);
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 function readInput(): Input {
   const v = [...touches.values()];
-  return { gas: !!(keys.ArrowRight || keys.KeyD || v.includes('gas')), brake: !!(keys.ArrowLeft || keys.KeyA || v.includes('brake')), turbo: !!(keys.Space || keys.ShiftLeft || keys.ArrowUp || keys.KeyW || v.includes('turbo')) };
+  // Up/W = gas, Down/S = brake & reverse, Left/A + Right/D = rotate the rover, Space/Shift = turbo
+  return { gas: !!(keys.ArrowUp || keys.KeyW || v.includes('gas')), brake: !!(keys.ArrowDown || keys.KeyS || v.includes('brake')), tiltL: !!(keys.ArrowLeft || keys.KeyA || v.includes('tiltL')), tiltR: !!(keys.ArrowRight || keys.KeyD || v.includes('tiltR')), turbo: !!(keys.Space || keys.ShiftLeft || keys.ShiftRight || v.includes('turbo')) };
 }
 document.addEventListener('visibilitychange', () => { if (document.hidden && scene === 'drive') setPaused(true); });
 window.addEventListener('blur', () => { if (scene === 'drive') setPaused(true); });
@@ -79,7 +88,7 @@ function setPaused(p: boolean) { if (scene !== 'drive' || !sim) return; paused =
 async function ad<T>(fn: () => Promise<T>): Promise<T> { adBusy = true; try { return await fn(); } finally { adBusy = false; } }
 async function startRun(lv: LevelDef, shield = false) {
   platform.gameplayStop(); await ad(() => platform.commercialBreak());
-  sim = new Sim(lv, shield); sel = lv; cam.init = false; paused = false; doubled = false; shown = 0; newBest = false; touches.clear(); coinShown = 0;
+  sim = new Sim(lv, shield); warmSprites(sim); sel = lv; cam.init = false; paused = false; doubled = false; shown = 0; newBest = false; touches.clear(); coinShown = 0;
   go('drive'); platform.gameplayStart();
 }
 function finishRun() {
@@ -103,66 +112,115 @@ const stars3 = (cx: number, cy: number, n: number, size: number) => { for (let i
 const dim = (a = 0.62) => { ctx.fillStyle = `rgba(4,6,16,${a})`; ctx.fillRect(0, 0, W, H); };
 
 // ---------- scenes ----------
+const WNAME = ['moon', 'mars', 'ice'] as const;
+const worldOpen = (w: number) => w === 0 || starsOf(w - 1, 9) > 0;
+function planetBadge(x: number, y: number, r: number, w: number) {
+  const c = [['#c9ced8', '#6e7584'], ['#ffb07a', '#a5502c'], ['#e9f6ff', '#5f86a6']][w];
+  const g = ctx.createRadialGradient(x - r * 0.35, y - r * 0.35, r * 0.1, x, y, r); g.addColorStop(0, c[0]); g.addColorStop(1, c[1]);
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill(); ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.fillStyle = 'rgba(0,0,0,.18)'; for (const [dx, dy, rr2] of [[-0.3, 0.2, 0.22], [0.35, -0.2, 0.15], [0.15, 0.45, 0.12]]) { ctx.beginPath(); ctx.arc(x + dx * r, y + dy * r, rr2 * r, 0, 7); ctx.fill(); }
+  if (w === 2) { ctx.strokeStyle = 'rgba(255,230,180,.8)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(x, y, r * 1.5, r * 0.35, -0.3, 0, 7); ctx.stroke(); }
+}
+
 function drawTitle(dt: number) {
   // attract mode: the real game drives itself behind the title
   if (!demo || demo.state !== 'run' || demo.distance > 140) { demo = new Sim(makeLevel(0, 0)); demoCam.init = false; }
-  const a = demo.chassis.getAngle();
-  demo.update(dt, { gas: Math.cos(a) > 0.85 || demo.grounded === 0 ? demo.grounded > 0 || a < 0.3 : false, brake: demo.grounded === 0 && a > 0.4, turbo: false });
+  const a = Math.atan2(Math.sin(demo.chassis.getAngle()), Math.cos(demo.chassis.getAngle())), air = demo.grounded === 0;
+  demo.update(dt, { gas: !air && a < 0.45, brake: false, tiltL: air && a < -0.15, tiltR: air && a > 0.2 || !air && a > 0.45, turbo: false });
   demoCam.follow(demo, dt); drawWorld(ctx, demo, demoCam, sceneT, dt);
-  const g = ctx.createLinearGradient(0, 0, 0, 330); g.addColorStop(0, 'rgba(2,4,12,.75)'); g.addColorStop(1, 'rgba(2,4,12,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, 330);
-  const y = 150 + Math.sin(sceneT * 2) * 5; text(ctx, t('title'), W / 2, y, 112, '#fff');
-  ctx.fillStyle = WORLDS[0].accent; ctx.fillRect(W / 2 - 140, y + 66, 280, 8);
-  button(ctx, W / 2 - 120, 540, 240, 140, 'green', () => go('map'), (cx, cy) => icon(ctx, 'play', cx, cy, 92), true);
+  const g = ctx.createLinearGradient(0, 0, 0, 360); g.addColorStop(0, 'rgba(2,4,12,.8)'); g.addColorStop(1, 'rgba(2,4,12,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, 360);
+  // logo plate
+  const y = 140 + Math.sin(sceneT * 2) * 4;
+  ctx.save(); ctx.translate(W / 2, y); ctx.rotate(-0.025);
+  rr(ctx, -330, -78, 660, 156, 34); ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fill();
+  rr(ctx, -330, -86, 660, 156, 34); const lg = ctx.createLinearGradient(0, -86, 0, 70); lg.addColorStop(0, '#2a3558'); lg.addColorStop(1, '#141b31'); ctx.fillStyle = lg; ctx.fill(); ctx.lineWidth = 5; ctx.strokeStyle = '#ff8a3d'; ctx.stroke();
+  text(ctx, t('title'), 0, -8, 96, '#fff');
+  for (let i = 0; i < 3; i++) icon(ctx, 'crate', -60 + i * 60, 76, 46);
+  ctx.restore();
+  button(ctx, W / 2 - 130, 520, 260, 150, 'green', () => go('map'), (cx, cy) => icon(ctx, 'play', cx, cy, 96), true);
   soundBtn(W - 88, 24);
 }
 
+function mapNode(i: number) { return { x: 150 + i * 108, y: 420 + Math.sin(i * 0.85 + 0.6) * 62 }; }
 function drawMap(dt: number) {
-  const w = WORLDS[wi]; backdrop(ctx, wi, sceneT * 0.5, 0, sceneT, dt);
-  ctx.fillStyle = w.ground.mid; ctx.beginPath(); ctx.moveTo(0, H); for (let x = 0; x <= W; x += 20) ctx.lineTo(x, 600 + Math.sin(x / 140 + wi) * 18 + Math.sin(x / 47) * 6); ctx.lineTo(W, H); ctx.fill();
-  ctx.strokeStyle = w.ground.rim; ctx.lineWidth = 5; ctx.beginPath(); for (let x = 0; x <= W; x += 20) { const yy = 600 + Math.sin(x / 140 + wi) * 18 + Math.sin(x / 47) * 6; x ? ctx.lineTo(x, yy) : ctx.moveTo(x, yy); } ctx.stroke();
+  const w = WORLDS[wi]; backdrop(ctx, wi, sceneT * 0.6, 0, sceneT, dt);
+  // ground
+  const gy = (x: number) => 560 + Math.sin(x / 150 + wi) * 16 + Math.sin(x / 53) * 6;
+  ctx.beginPath(); ctx.moveTo(0, H); for (let x = 0; x <= W; x += 16) ctx.lineTo(x, gy(x)); ctx.lineTo(W, H); ctx.closePath();
+  const gg = ctx.createLinearGradient(0, 520, 0, H); gg.addColorStop(0, w.ground.top); gg.addColorStop(1, w.ground.deep); ctx.fillStyle = gg; ctx.fill();
+  ctx.strokeStyle = w.ground.rim; ctx.lineWidth = 5; ctx.beginPath(); for (let x = 0; x <= W; x += 16) x ? ctx.lineTo(x, gy(x)) : ctx.moveTo(x, gy(x)); ctx.stroke();
+  // top bar
   coinBar(); soundBtn(W - 88, 20);
   iconBtn(W - 168, 20, 64, 'amber', 'garage', () => go('garage'));
   const avail = dailyAvailable(); iconBtn(W - 248, 20, 64, avail ? 'green' : 'gray', 'gift', () => { dailyShown = true; go('daily'); });
-  if (wi > 0) iconBtn(28, 300, 88, 'blue', 'left', () => { wi--; });
-  if (wi < 2 && starsOf(wi, 9) > 0) iconBtn(W - 116, 300, 88, 'blue', 'right', () => { wi++; });
-  text(ctx, t((['moon', 'mars', 'ice'] as const)[wi]), W / 2, 66, 56, w.accent);
-  for (let i = 0; i < 10; i++) {
-    const x = 170 + i * 104, y = 360 + Math.sin(i * 0.9 + 0.5) * 70, ok = levelUnlocked(wi, i), st = starsOf(wi, i);
-    if (i < 9) { ctx.strokeStyle = 'rgba(255,255,255,.3)'; ctx.lineWidth = 8; ctx.setLineDash([2, 14]); ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(170 + (i + 1) * 104, 360 + Math.sin((i + 1) * 0.9 + 0.5) * 70); ctx.stroke(); ctx.setLineDash([]); }
-    button(ctx, x - 44, y - 44, 88, 88, ok ? (st ? 'green' : 'blue') : 'gray', () => { if (ok) { sel = makeLevel(wi, i); selShield = false; go('pre'); } else flashMsg(); }, (cx, cy) => ok ? text(ctx, i + 1, cx, cy, 44) : icon(ctx, 'lock', cx, cy, 44), ok && !st);
-    if (ok) stars3(x, y + 66, st, 22);
+  // world tabs
+  for (let k = 0; k < 3; k++) {
+    const x = W / 2 - 300 + k * 200, open = worldOpen(k), on = k === wi;
+    rr(ctx, x, 100, 184, 76, 22); ctx.fillStyle = on ? 'rgba(255,138,61,.28)' : 'rgba(12,16,30,.6)'; ctx.fill(); ctx.lineWidth = on ? 4 : 2; ctx.strokeStyle = on ? '#ff8a3d' : 'rgba(255,255,255,.15)'; ctx.stroke();
+    planetBadge(x + 42, 138, 22, k);
+    if (open) text(ctx, t(WNAME[k]), x + 112, 139, 24, on ? '#fff' : '#b8c0d8'); else icon(ctx, 'lock', x + 112, 138, 34, '#b8c0d8');
+    buttons.push({ x, y: 100, w: 184, h: 76, cb: () => { if (open) wi = k; else flashMsg(); } });
   }
-  if (endlessUnlocked()) button(ctx, W - 250, 610, 210, 92, 'amber', () => { sel = makeLevel(wi, 9, true, (Math.random() * 1e6) | 0); selShield = false; go('pre'); }, (cx, cy) => { icon(ctx, 'inf', cx - 44, cy, 56); if (save.endlessBest) text(ctx, save.endlessBest + 'm', cx + 40, cy, 28); });
+  // road through the levels
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  const road = () => { ctx.beginPath(); for (let i = 0; i < 10; i++) { const n = mapNode(i); i ? ctx.lineTo(n.x, n.y) : ctx.moveTo(n.x, n.y); } };
+  road(); ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 34; ctx.stroke();
+  road(); ctx.strokeStyle = '#3a4152'; ctx.lineWidth = 26; ctx.stroke();
+  road(); ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 3; ctx.setLineDash([12, 12]); ctx.stroke(); ctx.setLineDash([]);
+  let cur = 0; for (let i = 0; i < 10; i++) if (levelUnlocked(wi, i)) cur = i;
+  for (let i = 0; i < 10; i++) {
+    const { x, y } = mapNode(i), ok = levelUnlocked(wi, i), st = starsOf(wi, i), isCur = i === cur && !st;
+    if (isCur) { ctx.strokeStyle = `rgba(255,138,61,${0.5 + 0.5 * Math.sin(sceneT * 5)})`; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(x, y, 50 + Math.sin(sceneT * 5) * 3, 0, 7); ctx.stroke(); }
+    ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.arc(x, y + 5, 42, 0, 7); ctx.fill();
+    const bg = ctx.createLinearGradient(0, y - 42, 0, y + 42); const c = !ok ? ['#7b8499', '#454c60'] : st ? ['#6be07a', '#1f9a3a'] : ['#ffb066', '#e0661c']; bg.addColorStop(0, c[0]); bg.addColorStop(1, c[1]);
+    ctx.fillStyle = bg; ctx.beginPath(); ctx.arc(x, y, 42, 0, 7); ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(255,255,255,.75)'; ctx.stroke();
+    if (ok) text(ctx, i + 1, x, y + 1, 38); else icon(ctx, 'lock', x, y, 40, '#e4e8f0');
+    if (ok) stars3(x, y + 60, st, 20);
+    buttons.push({ x: x - 46, y: y - 46, w: 92, h: 92, cb: () => { if (ok) { sel = makeLevel(wi, i); selShield = false; go('pre'); } else flashMsg(); } });
+  }
+  const cn = mapNode(cur); drawRoverPreview(ctx, cn.x, cn.y - 92, 30, sceneT, 3);
+  if (endlessUnlocked()) button(ctx, W - 250, 612, 220, 90, 'amber', () => { sel = makeLevel(wi, 9, true, (Math.random() * 1e6) | 0); selShield = false; go('pre'); }, (cx, cy) => { icon(ctx, 'inf', cx - 50, cy, 54); text(ctx, (save.endlessBest || 0) + 'm', cx + 34, cy, 28); });
   if (!dailyShown && avail && sceneT > 0.4) { dailyShown = true; go('daily'); }
 }
 
+function infoChip(x: number, y: number, w: number, ic: Icon, val: string | number, col = '#fff') { rr(ctx, x, y, w, 84, 20); ctx.fillStyle = 'rgba(255,255,255,.06)'; ctx.fill(); ctx.strokeStyle = 'rgba(255,255,255,.12)'; ctx.lineWidth = 2; ctx.stroke(); icon(ctx, ic, x + 50, y + 42, 50); text(ctx, val, x + 90, y + 44, 38, col, 'left'); }
 function drawPre(dt: number) {
-  drawMap(dt); dim(); buttons.length = 0;
-  panel(ctx, 240, 100, 800, 520);
-  if (sel.endless) icon(ctx, 'inf', W / 2, 160, 90); else text(ctx, `${t('level')} ${sel.world * 10 + sel.index + 1}`, W / 2, 160, 46, WORLDS[sel.world].accent);
-  icon(ctx, 'crate', 420, 255, 60); text(ctx, sel.crates, 470, 257, 46, '#fff', 'left');
-  if (sel.endless) text(ctx, save.endlessBest + 'm', 760, 257, 46, '#ffe27a');
-  else { icon(ctx, 'map', 690, 255, 54); text(ctx, `${sel.length}m`, 730, 257, 42, '#fff', 'left'); }
+  drawMap(dt); dim(0.6); buttons.length = 0;
+  panel(ctx, 230, 70, 820, 590);
+  planetBadge(410, 160, 40, sel.world);
+  if (sel.endless) icon(ctx, 'inf', W / 2, 160, 90); else text(ctx, `${t('level')} ${sel.world * 10 + sel.index + 1}`, W / 2 + 20, 160, 54, '#fff');
+  infoChip(290, 240, 330, 'crate', sel.crates + (sel.glass ? ` +${sel.glass}` : ''));
+  if (sel.endless) infoChip(660, 240, 330, 'trophy', (save.endlessBest || 0) + 'm', '#ffe27a'); else infoChip(660, 240, 330, 'flag', `${sel.length}m`);
   const hz: Icon[] = []; if (sel.slime > 0) hz.push('slime'); if (sel.meteor > 0) hz.push('meteor'); if (sel.ufo > 0) hz.push('ufo');
-  hz.forEach((h, i) => icon(ctx, h, 640 + (i - (hz.length - 1) / 2) * 96, 345, 66));
-  button(ctx, 300, 430, 330, 140, 'green', () => { startRun(sel, selShield); }, (cx, cy) => icon(ctx, 'play', cx, cy, 92), true);
-  button(ctx, 650, 430, 330, 140, 'amber', async () => { if (adBusy) return; const ok = await ad(() => platform.rewardedBreak()); if (ok) { selShield = true; startRun(sel, true); } else flashMsg(); },
-    (cx, cy) => { icon(ctx, 'clapper', cx - 70, cy, 70); icon(ctx, 'plus', cx - 6, cy, 34); icon(ctx, 'shield', cx + 60, cy, 70, '#8ff0ff'); });
-  iconBtn(262, 122, 64, 'gray', 'back', () => go('map'));
+  rr(ctx, 290, 346, 700, 96, 20); ctx.fillStyle = 'rgba(255,90,70,.08)'; ctx.fill(); ctx.strokeStyle = 'rgba(255,120,90,.3)'; ctx.lineWidth = 2; ctx.stroke();
+  hz.forEach((h, i) => icon(ctx, h, 640 + (i - (hz.length - 1) / 2) * 110, 394, 70));
+  button(ctx, 290, 476, 340, 150, 'green', () => { startRun(sel, selShield); }, (cx, cy) => icon(ctx, 'play', cx, cy, 96), true);
+  button(ctx, 650, 476, 340, 150, 'amber', async () => { if (adBusy) return; const ok = await ad(() => platform.rewardedBreak()); if (ok) { selShield = true; startRun(sel, true); } else flashMsg(); },
+    (cx, cy) => { icon(ctx, 'clapper', cx - 72, cy, 72); icon(ctx, 'plus', cx - 6, cy, 34); icon(ctx, 'shield', cx + 62, cy, 72, '#8ff0ff'); });
+  iconBtn(252, 92, 64, 'gray', 'back', () => go('map'));
 }
 
+const UP_ICON: Record<string, Icon> = { engine: 'engine', suspension: 'suspension', tires: 'tires', battery: 'battery', bed: 'bed', bumper: 'bumper', shield: 'shield', turbo: 'bolt' };
 function drawGarage(dt: number) {
-  backdrop(ctx, 0, 0, 0, sceneT, dt); dim(0.5);
+  backdrop(ctx, 0, 0, 0, sceneT, dt); dim(0.45);
   coinBar(); iconBtn(W - 100, 20, 64, 'green', 'back', () => go('map'));
   text(ctx, t('garage'), W / 2, 54, 52, '#ffd9a8');
+  // showroom: spotlight + pedestal + rover
+  panel(ctx, 24, 104, 452, 592);
+  const sg = ctx.createRadialGradient(250, 330, 10, 250, 330, 230); sg.addColorStop(0, 'rgba(255,220,170,.28)'); sg.addColorStop(1, 'rgba(255,220,170,0)'); ctx.fillStyle = sg; ctx.fillRect(30, 110, 440, 440);
+  ctx.fillStyle = '#2a3150'; ctx.beginPath(); ctx.ellipse(250, 446, 200, 34, 0, 0, 7); ctx.fill(); ctx.strokeStyle = '#ff8a3d'; ctx.lineWidth = 3; ctx.stroke();
+  drawRoverPreview(ctx, 250, 368, 118, sceneT, 3);
+  const u = save.up, bars: [Icon, number][] = [['speed', u.engine / 8], ['tires', u.tires / 8], ['suspension', u.suspension / 8], ['battery', u.battery / 8]];
+  bars.forEach(([ic, v], k) => { const y = 520 + k * 42; icon(ctx, ic, 74, y, 32); rr(ctx, 104, y - 10, 330, 20, 10); ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.fill(); rr(ctx, 104, y - 10, 330 * (0.12 + 0.88 * v), 20, 10); ctx.fillStyle = '#ff8a3d'; ctx.fill(); });
+  // upgrade rows (2 columns x 4)
   UPGRADES.forEach((id, i) => {
-    const col = i % 4, row = Math.floor(i / 4), x = 40 + col * 305, y = 116 + row * 296, lvl = save.up[id], mx = MAX_LEVEL[id], maxed = lvl >= mx, cost = maxed ? 0 : upgradeCost(id, lvl), can = !maxed && save.coins >= cost;
-    panel(ctx, x, y, 285, 276);
-    icon(ctx, id === 'shield' ? 'shield' : id === 'turbo' ? 'bolt' : id === 'battery' ? 'battery' : (id as Icon), x + 142, y + 62, 84, '#fff');
-    text(ctx, t(id), x + 142, y + 120, 26, '#cfd6f5');
-    for (let k = 0; k < mx; k++) { const px = x + 142 + (k - (mx - 1) / 2) * 25; ctx.fillStyle = k < lvl ? '#5ee06a' : 'rgba(255,255,255,.2)'; ctx.beginPath(); ctx.arc(px, y + 152, 8, 0, 7); ctx.fill(); }
-    button(ctx, x + 26, y + 182, 233, 76, maxed ? 'gray' : can ? 'green' : 'gray', () => { if (maxed) return; if (buy(id)) sfx.coin(); else flashMsg(); },
-      (cx, cy) => { if (maxed) text(ctx, t('max'), cx, cy, 34, '#ddd'); else { icon(ctx, 'coin', cx - 52, cy, 40); text(ctx, cost, cx - 22, cy + 1, 34, can ? '#fff' : '#ff9a9a', 'left'); } });
+    const col = Math.floor(i / 4), row = i % 4, x = 492 + col * 392, y = 104 + row * 150, lvl = save.up[id], mx = MAX_LEVEL[id], maxed = lvl >= mx, cost = maxed ? 0 : upgradeCost(id, lvl), can = !maxed && save.coins >= cost;
+    panel(ctx, x, y, 376, 138);
+    rr(ctx, x + 16, y + 20, 98, 98, 22); ctx.fillStyle = 'rgba(255,255,255,.07)'; ctx.fill(); icon(ctx, UP_ICON[id], x + 65, y + 69, 70, '#fff');
+    text(ctx, t(id), x + 128, y + 40, 26, '#e3e8f8', 'left');
+    for (let k = 0; k < mx; k++) { rr(ctx, x + 128 + k * 28, y + 62, 22, 12, 5); ctx.fillStyle = k < lvl ? '#5ee06a' : 'rgba(255,255,255,.16)'; ctx.fill(); }
+    button(ctx, x + 128, y + 84, 230, 44, maxed ? 'gray' : can ? 'green' : 'gray', () => { if (maxed) return; if (buy(id)) sfx.coin(); else flashMsg(); },
+      (cx, cy) => { if (maxed) text(ctx, t('max'), cx, cy, 26, '#ddd'); else { icon(ctx, 'coin', cx - 50, cy, 30); text(ctx, cost, cx - 28, cy + 1, 26, can ? '#fff' : '#ff9a9a', 'left'); } });
   });
 }
 
@@ -231,7 +289,7 @@ function drawHud(s: Sim, dt: number, inp: Input) {
   if (key !== hudKey) {
     hudKey = key; const hh = Math.ceil(150 * k);
     if (hudCanvas.width !== canvas.width || hudCanvas.height !== hh) { hudCanvas.width = canvas.width; hudCanvas.height = hh; }
-    const hc = hudCanvas.getContext('2d', { willReadFrequently: true })!; hc.setTransform(1, 0, 0, 1, 0, 0); hc.clearRect(0, 0, hudCanvas.width, hudCanvas.height); hc.setTransform(k, 0, 0, k, 0, 0);
+    const hc = hudCanvas.getContext('2d')!; hc.setTransform(1, 0, 0, 1, 0, 0); hc.clearRect(0, 0, hudCanvas.width, hudCanvas.height); hc.setTransform(k, 0, 0, k, 0, 0);
     hudTop(s, hc);
   }
   ctx.drawImage(hudCanvas, 0, 0, W, hudCanvas.height / k); // dynamic: redrawn only when values change
@@ -241,21 +299,22 @@ function drawHud(s: Sim, dt: number, inp: Input) {
   // touch pedals (compact, semi-transparent, same style)
   if (touchUI) {
     const P = pedals(), down = [...touches.values()];
-    const pedal = (x: number, y: number, r: number, ic: Icon, on: boolean, ring = -1) => {
-      ctx.fillStyle = on ? 'rgba(90,180,255,.45)' : 'rgba(12,16,30,.45)'; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill();
-      ctx.lineWidth = 3; ctx.strokeStyle = on ? '#9fd4ff' : 'rgba(255,255,255,.35)'; ctx.stroke();
-      if (ring >= 0) { ctx.strokeStyle = '#ffd23a'; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(x, y, r - 5, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * ring); ctx.stroke(); }
-      ctx.globalAlpha = 0.9; icon(ctx, ic, x, y, r * 0.9); ctx.globalAlpha = 1; };
-    pedal(P.brake.x, P.brake.y, P.sz / 2, 'left', down.includes('brake') || inp.brake && !keys.ArrowLeft);
-    pedal(P.gas.x, P.gas.y, P.sz / 2, 'right', down.includes('gas'));
-    pedal(P.turbo.x, P.turbo.y, P.turbo.r, 'bolt', down.includes('turbo'), s.turbo);
-  } else if (sel.world === 0 && sel.index === 0 && !sel.endless && s.distance < 30 && s.t < 9) {
+    const pedal = (k: Pad, ic: Icon, on: boolean, ring = -1) => { const { x, y, r } = P[k];
+      ctx.fillStyle = on ? 'rgba(255,138,61,.5)' : 'rgba(12,16,30,.42)'; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill();
+      ctx.lineWidth = 3; ctx.strokeStyle = on ? '#ffd2b0' : 'rgba(255,255,255,.32)'; ctx.stroke();
+      if (ring >= 0) { ctx.strokeStyle = '#ffd23a'; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(x, y, r - 6, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * ring); ctx.stroke(); }
+      ctx.globalAlpha = 0.92; icon(ctx, ic, x, y, r * 0.95); ctx.globalAlpha = 1; };
+    pedal('tiltL', 'tiltL', !!inp.tiltL); pedal('tiltR', 'tiltR', !!inp.tiltR);
+    pedal('brake', 'down', inp.brake); pedal('gas', 'up', inp.gas); pedal('turbo', 'bolt', inp.turbo, s.turbo);
+    void down;
+  } else if (sel.world === 0 && sel.index === 0 && !sel.endless && s.t < 10) {
     // key hint on the first level only
-    const y = H - 70, al = Math.min(1, (9 - s.t) / 1.5); ctx.globalAlpha = al; chip(W / 2 - 290, y - 38, 580, 76);
-    const cap = (x: number, w: number, lbl: string | Icon, ic = false) => { rr(ctx, x, y - 24, w, 48, 10); ctx.fillStyle = '#e9edf5'; ctx.fill(); ctx.strokeStyle = '#7a8296'; ctx.lineWidth = 2; ctx.stroke(); if (ic) icon(ctx, lbl as Icon, x + w / 2, y, 26, '#2a3142'); else text(ctx, lbl, x + w / 2, y + 1, 24, '#2a3142', 'center', false); };
-    cap(W / 2 - 270, 48, 'left', true); cap(W / 2 - 216, 48, 'A'); icon(ctx, 'brakeIc', W / 2 - 132, y, 40);
-    cap(W / 2 - 80, 48, 'right', true); cap(W / 2 - 26, 48, 'D'); icon(ctx, 'gasIc', W / 2 + 58, y, 40);
-    cap(W / 2 + 110, 110, 'bolt', true); icon(ctx, 'turboIc', W / 2 + 252, y, 40); ctx.globalAlpha = 1;
+    const y = H - 64, al = Math.min(1, (10 - s.t) / 1.5); ctx.globalAlpha = al; chip(W / 2 - 330, y - 38, 660, 76);
+    const cap = (x: number, w: number, lbl: string | Icon, ic = false) => { rr(ctx, x, y - 24, w, 48, 10); ctx.fillStyle = '#e9edf5'; ctx.fill(); ctx.strokeStyle = '#7a8296'; ctx.lineWidth = 2; ctx.stroke(); if (ic) icon(ctx, lbl as Icon, x + w / 2, y, 26, '#2a3142'); else text(ctx, lbl, x + w / 2, y + 1, 22, '#2a3142', 'center', false); };
+    cap(W / 2 - 312, 48, 'up', true); icon(ctx, 'gasIc', W / 2 - 236, y, 36);
+    cap(W / 2 - 190, 48, 'down', true); icon(ctx, 'brakeIc', W / 2 - 114, y, 36);
+    cap(W / 2 - 66, 48, 'left', true); cap(W / 2 - 12, 48, 'right', true); icon(ctx, 'flip', W / 2 + 70, y, 36);
+    cap(W / 2 + 116, 110, 'bolt', true); icon(ctx, 'turboIc', W / 2 + 270, y, 36); ctx.globalAlpha = 1;
   }
 }
 
