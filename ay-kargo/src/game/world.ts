@@ -24,11 +24,13 @@ export const CRATE_HALF = 0.22;
 /** Prototype-tuned rover + hazards. Upgrade curves are the prototype's 0..5 range spread over our 0..8 levels. */
 export class Sim {
   world: planck.World; terrain: Terrain; W = WORLDS[0];
-  chassis!: planck.Body; wheels: planck.Body[] = []; joints: planck.WheelJoint[] = [];
+  chassis!: planck.Body; wheels: planck.Body[] = []; joints: (planck.WheelJoint | null)[] = [];
   crates: Crate[] = []; slimes: Slime[] = []; rocks: planck.Body[] = []; latched: Latched[] = [];
   meteors: Meteor[] = []; ufo: Ufo | null = null; craters: Crater[] = [];
   particles: Particle[] = []; popups: Popup[] = []; chunks = new Map<number, planck.Body>();
-  state: 'run' | 'win' | 'fail' = 'run'; failReason: '' | 'flip' | 'battery' | 'crates' = '';
+  state: 'run' | 'win' | 'fail' = 'run'; failReason: '' | 'flip' | 'battery' | 'crates' | 'wheel' = '';
+  /** wheel health (slimes chew on wheels); at 0 the wheel is torn off */
+  wheelHP = [1, 1]; wheelGone = [false, false]; wheelStuckT = 0; wheelTornT = [0, 0];
   t = 0; acc = 0; shake = 0; slowmo = 0; punch = 0; hitFlash = 0; shieldFlash = 0;
   coinsRun = 0; squashed = 0; perfect = 0; pickedCoins = 0;
   battery = 0; batteryMax = 0; rechargeUsed = false; flipT = 0; stillT = 0;
@@ -176,7 +178,7 @@ export class Sim {
   }
   private groundedCount() {
     let n = 0;
-    for (const w of this.wheels) for (let ce = w.getContactList(); ce; ce = ce.next) { const k = (ce.other!.getUserData() as Ud)?.k; if (ce.contact.isTouching() && (k === 'ground' || k === 'rock')) { n++; break; } }
+    for (let wi = 0; wi < 2; wi++) { if (this.wheelGone[wi]) continue; const w = this.wheels[wi]; for (let ce = w.getContactList(); ce; ce = ce.next) { const k = (ce.other!.getUserData() as Ud)?.k; if (ce.contact.isTouching() && (k === 'ground' || k === 'rock')) { n++; break; } } }
     return n;
   }
 
@@ -200,11 +202,15 @@ export class Sim {
     const pitch = Math.atan2(Math.sin(ch.getAngle()), Math.cos(ch.getAngle()));
     this.grounded = this.groundedCount();
     if (this.grounded > 0 && inp.gas && pitch > 0.5) { tq *= Math.max(0.1, 1 - (pitch - 0.5) * 3); if (pitch > 0.7) ch.applyTorque(-5 * (pitch - 0.7), true); }
-    for (const j of this.joints) { j.setMotorSpeed(ms); j.setMaxMotorTorque(tq); }
+    for (const j of this.joints) if (j) { j.setMotorSpeed(ms); j.setMaxMotorTorque(tq); }
     const air = this.grounded === 0;
     // Left/Right rotate the rover: strong in the air, gentle balance help on the ground
     const tilt = (inp.tiltL ? 1 : 0) - (inp.tiltR ? 1 : 0);
-    if (tilt && !win) ch.applyTorque(tilt * (air ? 2.6 : 1.4), true);
+    if (tilt && !win) {
+      // strong enough to clearly rotate in the air (~2 rad/s), capped so it stays controllable; on the ground it shifts the balance
+      const w = ch.getAngularVelocity();
+      if (air) { if (tilt * w < 4.5) ch.applyTorque(tilt * 11, true); } else ch.applyTorque(tilt * 6, true);
+    }
     else if (air && !win) ch.setAngularVelocity(ch.getAngularVelocity() * (1 - dt * 1.8)); // stop spinning when the stick is released
     if (this.latched.length) { const v = ch.getLinearVelocity(); ch.applyForceToCenter(new Vec2(-v.x * 0.9 * this.latched.length, 0), true); if (hasE) this.battery = Math.max(0, this.battery - dt * 1.2 * this.latched.length); }
     if (!win && (inp.gas || inp.brake) && hasE) this.battery = Math.max(0, this.battery - dt * (inp.gas ? 3.5 : 2));
@@ -228,15 +234,22 @@ export class Sim {
     for (const s of this.hitQueue) {
       if (s.dead) continue;
       const q = s.body.getPosition(); s.dead = true; this.world.destroyBody(s.body);
-      if (v > 6.5 - 0.8 * u.bumper || this.turboOn) { this.coinsRun += 3; this.squashed++; this.pop(q.x, q.y + 0.6, 3, '#a3e635'); this.emit(q.x, q.y, 'goo', 14, 4.5); sfx.squash(); this.shake = Math.max(this.shake, 0.18);
+      if (v > 4.5 - 0.5 * u.bumper || this.turboOn) { const sc = Math.max(1, Math.round(this.W.coinMult)); this.coinsRun += sc; this.squashed++; this.pop(q.x, q.y + 0.6, sc, '#a3e635'); this.emit(q.x, q.y, 'goo', 14, 4.5); sfx.squash(); this.shake = Math.max(this.shake, 0.18);
         this.wheels[1].applyLinearImpulse(new Vec2(0, 0.35), this.wheels[1].getPosition(), true); }
-      else if (this.latched.length < 4) { const lq = ch.getLocalPoint(q); this.latched.push({ lx: Math.max(-1.2, Math.min(1.3, lq.x)), ly: lq.y > 0.3 ? 0.42 : 0.02, t: 0, phase: this.r() * 6 });
+      else if (this.latched.length < 4) { const lq = ch.getLocalPoint(q); const onTop = lq.y > 0.3, wx = lq.x < 0 ? -0.95 : 0.95; this.latched.push({ lx: onTop ? Math.max(-1.2, Math.min(1.3, lq.x)) : wx + (this.r() - 0.5) * 0.5, ly: onTop ? 0.42 : -0.3, t: 0, phase: this.r() * 6 });
         const cv = ch.getLinearVelocity(); ch.setLinearVelocity(new Vec2(cv.x * 0.65, cv.y)); this.emit(q.x, q.y + 0.2, 'goo', 10, 2.5); sfx.latch(); this.shake = Math.max(this.shake, 0.12); }
       else { this.emit(q.x, q.y, 'goo', 10, 3); sfx.splat(); }
     }
     this.hitQueue.length = 0;
     this.slimes = this.slimes.filter(s => !s.dead);
-    for (const l of this.latched) if (l.t > 6) { this.shakeOff(false); break; }
+    for (const l of this.latched) if (l.t > 8) { this.shakeOff(false); break; }
+    // slimes stuck on a wheel chew it: each one costs ~1/4 of its health per second; at 0 the wheel tears off
+    for (let i = 0; i < 2; i++) {
+      if (this.wheelGone[i]) continue; const wx = i ? 0.95 : -0.95;
+      const n = this.latched.filter(l => l.ly < 0 && Math.abs(l.lx - wx) < 0.6).length;
+      if (n) { this.wheelHP[i] -= dt * 0.08 * n * n; if (Math.random() < 0.15 * n) { const wp = this.wheels[i].getPosition(); this.emit(wp.x, wp.y, 'spark', 1, 3); } }
+      if (this.wheelHP[i] <= 0) this.tearWheel(i);
+    }
     // slimes hop toward the rover when it comes close
     for (const s of this.slimes) {
       s.phase += dt * 3; s.hopT += dt; const sp = s.body.getPosition(), dx = p.x - sp.x;
@@ -262,10 +275,22 @@ export class Sim {
     this.flipT = Math.cos(a) < -0.2 ? this.flipT + dt : 0;
     if (!this.L.endless && p.x >= this.L.length && this.cratesLeft > 0) { this.state = 'win'; sfx.win(); for (const c of this.crates) if (!c.lost) { const cp = c.body.getPosition(); this.emit(cp.x, cp.y + 0.3, 'coin', 6, 4); } return; }
     if (this.flipT > 1.4) return this.fail('flip');
+    if (this.wheelGone[0] && this.wheelGone[1]) return this.fail('wheel');
+    if ((this.wheelGone[0] || this.wheelGone[1]) && Math.abs(this.speed) < 0.4) { this.wheelStuckT += dt; if (this.wheelStuckT > 2.5) return this.fail('wheel'); } else this.wheelStuckT = 0;
     if (this.cratesLeft === 0) return this.fail('crates');
     if (this.battery <= 0 && ch.getLinearVelocity().length() < 0.3) { this.stillT += dt; if (this.stillT > 0.4) this.fail('battery'); } else this.stillT = 0;
   }
-  private fail(r: 'flip' | 'battery' | 'crates') { this.state = 'fail'; this.failReason = r; sfx.fail(); }
+  private tearWheel(i: number) {
+    const j = this.joints[i], w = this.wheels[i]; if (!j) return;
+    this.world.destroyJoint(j); this.joints[i] = null; this.wheelGone[i] = true; this.wheelHP[i] = 0;
+    // the torn wheel only collides with the ground now and bounces away; removed after a few seconds
+    for (let f = w.getFixtureList(); f; f = f.getNext()) f.setFilterData({ groupIndex: 0, categoryBits: 16, maskBits: 1 });
+    w.applyLinearImpulse(new Vec2((i ? 1 : -1) * 2.4, 3.2), w.getPosition(), true); w.setAngularVelocity((i ? -1 : 1) * 14); this.wheelTornT[i] = this.t;
+    const wp = w.getPosition(); this.emit(wp.x, wp.y, 'spark', 16, 6); this.emit(wp.x, wp.y, 'goo', 10, 4);
+    const wx = i ? 0.95 : -0.95; this.latched = this.latched.filter(l => !(l.ly < 0 && Math.abs(l.lx - wx) < 0.6));
+    sfx.boom(); this.shake = Math.max(this.shake, 0.6); this.slowmo = 0.4; this.punch = 1;
+  }
+  private fail(r: 'flip' | 'battery' | 'crates' | 'wheel') { this.state = 'fail'; this.failReason = r; sfx.fail(); }
   recharge() { this.rechargeUsed = true; this.battery = this.batteryMax * 0.5; this.state = 'run'; this.failReason = ''; this.stillT = 0; }
 
   private spawnAhead() {

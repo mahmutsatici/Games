@@ -88,7 +88,7 @@ export function backdrop(ctx: CanvasRenderingContext2D, wi: number, camX: number
   ctx.globalAlpha = 1;
   shoot.t -= dt; if (shoot.t < 0) shoot = { t: 6 + Math.random() * 6, x: 200 + Math.random() * 900, y: 40 + Math.random() * 160 };
   if (shoot.t > 5.4 && shoot.t < 6.2) { const p = 1 - (shoot.t - 5.4) / 0.8, x = shoot.x + p * 260, y = shoot.y + p * 90; const g = ctx.createLinearGradient(x - 120, y - 42, x, y); g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(1, 'rgba(255,255,255,.9)'); ctx.strokeStyle = g; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(x - 120, y - 42); ctx.lineTo(x, y); ctx.stroke(); }
-  ctx.drawImage(planetCanvas(wd), 860 - (camX * 0.8 % 80), 30 - camY * 2);
+  ctx.drawImage(planetCanvas(wd), 860, 30); // planets are far away: fixed in the sky
   for (let l = 0; l < 3; l++) {
     const R = RIDGE[l], off = camX * BASE_PPM * R.par, yoff = -camY * [4, 8, 14][l];
     const bottom = Math.min(groundBottom, l < 2 ? RIDGE[l + 1].base + 40 + yoff : H); // only down to where nearer layers / the ground cover it
@@ -362,11 +362,6 @@ function roverBody(ctx: CanvasRenderingContext2D, s: number) {
   ctx.restore();
   deck(); ctx.strokeStyle = OUT; ctx.lineWidth = 2.5; ctx.stroke();
   ctx.fillStyle = '#8f99ab'; for (let x = -1.1; x < 1.3; x += 0.32) { ctx.beginPath(); ctx.arc(x * s, -0.14 * s, 0.018 * s, 0, 7); ctx.fill(); }
-  // wheel fender arches
-  for (const wx of [-0.95, 0.95]) {
-    ctx.fillStyle = '#39404f'; ctx.beginPath(); ctx.arc(wx * s, 0.42 * s, 0.6 * s, Math.PI + 0.55, -0.55); ctx.arc(wx * s, 0.42 * s, 0.5 * s, -0.6, Math.PI + 0.6, true); ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = '#5b6578'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(wx * s, 0.42 * s, 0.6 * s, Math.PI + 0.6, -0.6); ctx.stroke();
-  }
   // tail light with glow
   const tl = ctx.createRadialGradient(-1.43 * s, -0.12 * s, 0, -1.43 * s, -0.12 * s, 0.16 * s); tl.addColorStop(0, 'rgba(255,80,80,.9)'); tl.addColorStop(1, 'rgba(255,60,60,0)'); ctx.fillStyle = tl; ctx.beginPath(); ctx.arc(-1.43 * s, -0.12 * s, 0.16 * s, 0, 7); ctx.fill();
   ctx.fillStyle = '#ff3b3b'; ctx.strokeStyle = '#7a1414'; ctx.lineWidth = 1.5; rr(ctx, -1.46 * s, -0.17 * s, 0.06 * s, 0.1 * s, 2); ctx.fill(); ctx.stroke();
@@ -425,6 +420,7 @@ function drawRover(ctx: CanvasRenderingContext2D, sim: Sim, a: number, X: (x: nu
     ctx.fillStyle = fg; ctx.beginPath(); ctx.moveTo(-1.45 * S, -0.16 * S); ctx.quadraticCurveTo(-1.45 * S - 1.5 * S * f, 0, -1.45 * S, 0.12 * S); ctx.closePath(); ctx.fill(); }
   // springs that visibly compress
   for (let i = 0; i < 2; i++) {
+    if (sim.wheelGone[i]) continue;
     const w = interp(sim.wheels[i], a), lw = toLocal(w.x, w.y), ax = i ? 0.95 : -0.95, top = -0.02 * S, bot = -lw.y * S, sx = lw.x * S;
     ctx.strokeStyle = '#3a4152'; ctx.lineWidth = 0.08 * S; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(ax * S, top); ctx.lineTo(sx, bot); ctx.stroke();
     ctx.strokeStyle = '#ff8a3d'; ctx.lineWidth = 0.05 * S; ctx.beginPath(); const N = 7, len = bot - top;
@@ -433,7 +429,8 @@ function drawRover(ctx: CanvasRenderingContext2D, sim: Sim, a: number, X: (x: nu
   ctx.restore();
   const wheel = sprite('wheel2', [-0.52, -0.52, 0.52, 0.52], (g, s) => drawWheel(g, 0, 0, 0, s, false));
   const fast = Math.abs(sim.speed) > 7;
-  for (let i = 0; i < 2; i++) { const w = interp(sim.wheels[i], a), wx = X(w.x), wy = Y(w.y); blit(ctx, wheel, wx, wy, w.a, S); if (sim.latched.length) drawGoo(ctx, wx, wy, w.a, S);
+  for (let i = 0; i < 2; i++) { if (sim.wheelGone[i]) { const k = sim.t - sim.wheelTornT[i]; if (k > 2.5) continue; ctx.globalAlpha = Math.min(1, (2.5 - k) * 2); }
+    const w = interp(sim.wheels[i], a), jit = !sim.wheelGone[i] && sim.wheelHP[i] < 0.6 ? (1 - sim.wheelHP[i]) * 3 : 0, wx = X(w.x) + (Math.random() - 0.5) * jit, wy = Y(w.y) + (Math.random() - 0.5) * jit; blit(ctx, wheel, wx, wy, w.a, S); if (sim.latched.length && !sim.wheelGone[i]) drawGoo(ctx, wx, wy, w.a, S); ctx.globalAlpha = 1;
     if (fast) { ctx.strokeStyle = 'rgba(30,33,41,.35)'; ctx.lineWidth = 0.1 * S; ctx.beginPath(); ctx.arc(wx, wy, 0.33 * S, w.a * -1, w.a * -1 + 2); ctx.stroke(); } }
   blit(ctx, sprite('body2:' + save.up.bumper, [-1.62, -0.26, 1.9, 0.48], roverBody), cx, cy, ch.a, S);
   for (const c of sim.crates) { if (c.gone) continue; const q = interp(c.body, a), h = sim.crateHalf;

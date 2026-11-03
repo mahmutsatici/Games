@@ -31,7 +31,7 @@ function resize() {
   const dpr = Math.min(window.devicePixelRatio || 1, 2), sw = window.innerWidth, sh = window.innerHeight, s = Math.min(sw / W, sh / H);
   canvas.style.width = W * s + 'px'; canvas.style.height = H * s + 'px';
   Object.assign(stormEl.style, { width: W * s + 'px', height: H * s + 'px', left: (sw - W * s) / 2 + 'px', top: (sh - H * s) / 2 + 'px' });
-  const k = Math.min(dpr, 1280 / (W * s)) * renderScale; // never render more than 1280 px wide
+  const k = Math.min(dpr, 2560 / (W * s)) * renderScale; // full device resolution (up to 2560 px wide) for crisp art
   canvas.width = Math.round(W * s * Math.max(k, 0.5)); canvas.height = Math.round(H * s * Math.max(k, 0.5));
 }
 function adaptResolution(dt: number) {
@@ -294,6 +294,9 @@ function drawHud(s: Sim, dt: number, inp: Input) {
   }
   ctx.drawImage(hudCanvas, 0, 0, W, hudCanvas.height / k); // dynamic: redrawn only when values change
   buttons.push({ x: W - 16 - 64, y: 16, w: 64, h: 64, cb: () => setPaused(true) });
+  // wheel damage warning (slimes chewing a wheel)
+  const hp = Math.min(s.wheelGone[0] ? 1 : s.wheelHP[0], s.wheelGone[1] ? 1 : s.wheelHP[1]);
+  if (hp < 0.75 && Math.floor(sceneT * 6) % 2 === 0) { ctx.fillStyle = 'rgba(255,60,50,.85)'; ctx.beginPath(); ctx.arc(W / 2 - 70, 128, 36, 0, 7); ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.stroke(); icon(ctx, 'tires', W / 2 - 70, 128, 48); }
   // ufo warning
   if (s.ufo && !s.ufo.leaving && Math.floor(sceneT * 5) % 2 === 0) icon(ctx, 'ufo', W / 2, 128, 54, '#ff6b5e');
   // touch pedals (compact, semi-transparent, same style)
@@ -326,7 +329,7 @@ function drawResult(dt: number) {
   else {
     const ns = win ? Math.min(s.stars, Math.floor(sceneT * 2.5)) : 0; if (ns > (drawResult as any).ls) { sfx.star(ns); } (drawResult as any).ls = ns; stars3(W / 2, 145, ns, 84);
     icon(ctx, 'crate', W / 2 - 96, 250, 58); text(ctx, `${s.delivered} / ${s.L.crates}`, W / 2 - 52, 252, 56, win ? '#fff' : '#ff9a9a', 'left');
-    if (!win) icon(ctx, s.failReason === 'flip' ? 'flip' : s.failReason === 'battery' ? 'battery' : 'crate', W / 2 + 200, 250, 50, '#ff6b5e');
+    if (!win) icon(ctx, s.failReason === 'flip' ? 'flip' : s.failReason === 'battery' ? 'battery' : s.failReason === 'wheel' ? 'tires' : 'crate', W / 2 + 200, 250, 50, '#ff6b5e');
   }
   icon(ctx, 'coin', W / 2 - 110, 345, 70); text(ctx, `+${Math.floor(shown)}`, W / 2 - 64, 347, 72, '#ffe27a', 'left');
   const bw = 230, by = 430, rew = !doubled && earned > 0;
