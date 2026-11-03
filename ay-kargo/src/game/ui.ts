@@ -9,8 +9,12 @@ export function text(c: CanvasRenderingContext2D, s: string | number, x: number,
   if (stroke) { c.lineWidth = Math.max(3, size / 6); c.strokeStyle = 'rgba(10,12,24,.85)'; c.lineJoin = 'round'; c.strokeText(String(s), x, y); }
   c.fillStyle = color; c.fillText(String(s), x, y);
 }
-export function panel(c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, fill = 'rgba(16,20,40,.88)') {
-  rr(c, x, y, w, h, 24); c.fillStyle = fill; c.fill(); c.lineWidth = 3; c.strokeStyle = 'rgba(255,255,255,.18)'; c.stroke();
+/** One panel style for every overlay (pause, result, garage, daily, briefing). */
+export function panel(c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
+  rr(c, x, y + 8, w, h, 28); c.fillStyle = 'rgba(0,0,0,.35)'; c.fill();
+  const g = c.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, 'rgba(30,38,64,.96)'); g.addColorStop(1, 'rgba(14,18,34,.96)');
+  rr(c, x, y, w, h, 28); c.fillStyle = g; c.fill(); c.lineWidth = 3; c.strokeStyle = 'rgba(255,255,255,.16)'; c.stroke();
+  c.strokeStyle = 'rgba(255,138,61,.85)'; c.lineWidth = 4; c.beginPath(); c.moveTo(x + 40, y + 2); c.lineTo(x + w - 40, y + 2); c.stroke();
 }
 export type Tone = 'green' | 'amber' | 'blue' | 'gray' | 'red';
 const TONES: Record<Tone, [string, string]> = { green: ['#5ee06a', '#1f9a3a'], amber: ['#ffc247', '#d4780a'], blue: ['#5ab4ff', '#2260c4'], gray: ['#7b8499', '#454c60'], red: ['#ff6b5e', '#b42318'] };
@@ -29,7 +33,7 @@ export function hit(px: number, py: number): boolean {
 }
 export function overButton(px: number, py: number) { return buttons.some(b => px >= b.x && px <= b.x + b.w && py >= b.y && py <= b.y + b.h); }
 
-export type Icon = 'play' | 'retry' | 'next' | 'garage' | 'map' | 'clapper' | 'coin' | 'star' | 'starOff' | 'battery' | 'crate' | 'shield' | 'bolt' | 'slime' | 'meteor' | 'ufo' | 'sound' | 'soundOff' | 'gift' | 'lock' | 'pause' | 'check' | 'left' | 'right' | 'back' | 'engine' | 'suspension' | 'tires' | 'bed' | 'bumper' | 'flip' | 'inf' | 'plus' | 'x2' | 'home';
+export type Icon = 'play' | 'retry' | 'next' | 'garage' | 'map' | 'clapper' | 'coin' | 'star' | 'starOff' | 'battery' | 'crate' | 'shield' | 'bolt' | 'slime' | 'meteor' | 'ufo' | 'sound' | 'soundOff' | 'gift' | 'lock' | 'pause' | 'check' | 'left' | 'right' | 'back' | 'engine' | 'suspension' | 'tires' | 'bed' | 'bumper' | 'flip' | 'inf' | 'plus' | 'x2' | 'home' | 'flag' | 'glassCrate' | 'brakeIc' | 'gasIc' | 'turboIc';
 export function icon(c: CanvasRenderingContext2D, n: Icon, x: number, y: number, s: number, col = '#fff') {
   c.save(); c.translate(x, y); c.scale(s / 40, s / 40); c.fillStyle = col; c.strokeStyle = col; c.lineWidth = 5; c.lineCap = 'round'; c.lineJoin = 'round';
   const P = (d: string, fill = true) => { const p = new Path2D(d); fill ? c.fill(p) : c.stroke(p); };
@@ -67,6 +71,11 @@ export function icon(c: CanvasRenderingContext2D, n: Icon, x: number, y: number,
     case 'suspension': c.beginPath(); c.moveTo(0, -18); for (let i = 0; i < 6; i++) c.lineTo(i % 2 ? -10 : 10, -14 + i * 6); c.lineTo(0, 18); c.stroke(); break;
     case 'tires': c.beginPath(); c.arc(0, 0, 15, 0, 7); c.lineWidth = 9; c.stroke(); c.lineWidth = 3; c.beginPath(); c.arc(0, 0, 4, 0, 7); c.stroke(); break;
     case 'bed': c.fillRect(-18, 10, 36, 6); c.fillRect(-18, -14, 5, 24); c.fillRect(13, -4, 5, 14); c.fillStyle = '#d9964b'; c.fillRect(-8, -2, 14, 12); break;
+    case 'flag': c.fillStyle = '#e9edf5'; c.fillRect(-14, -18, 4, 36); for (let r = 0; r < 3; r++) for (let k = 0; k < 4; k++) { c.fillStyle = (r + k) % 2 ? '#1f2430' : '#fff'; c.fillRect(-10 + k * 7, -18 + r * 7, 7, 7); } break;
+    case 'glassCrate': c.fillStyle = 'rgba(160,232,255,.55)'; c.fillRect(-14, -14, 28, 28); c.strokeStyle = '#5ab4e0'; c.lineWidth = 3; c.strokeRect(-14, -14, 28, 28); c.strokeStyle = '#fff'; c.beginPath(); c.moveTo(-8, 6); c.lineTo(2, -8); c.stroke(); break;
+    case 'brakeIc': P('M2 -14 L-12 0 L2 14 Z'); P('M16 -14 L2 0 L16 14 Z'); break;
+    case 'gasIc': P('M-2 -14 L12 0 L-2 14 Z'); P('M-16 -14 L-2 0 L-16 14 Z'); break;
+    case 'turboIc': c.fillStyle = '#ff9a2e'; P('M-18 0 C-6 -16 10 -10 18 0 C10 10 -6 16 -18 0 Z'); c.fillStyle = '#fff3b0'; P('M-6 0 C0 -6 8 -4 12 0 C8 4 0 6 -6 0 Z'); break;
     case 'bumper': P('M-18 -10 L18 -4 L18 8 L-18 14 Z'); c.fillStyle = '#222'; c.fillRect(-4, -6, 4, 14); break;
   }
   c.restore();

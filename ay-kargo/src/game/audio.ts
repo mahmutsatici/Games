@@ -20,11 +20,24 @@ export function setMuted(m: boolean) { muted = m; applyMute(); }
 export function setAdMuted(m: boolean) { adMuted = m; applyMute(); }
 export const isMuted = () => muted;
 
-export function engine(speed01: number, gas: boolean, on: boolean) {
+/** wheelSpeed01: wheel angular speed normalised to 0..1, pitch follows it */
+export function engine(wheelSpeed01: number, gas: boolean, on: boolean) {
   if (!ctx) return;
   const t = ctx.currentTime;
-  engOsc.frequency.setTargetAtTime(38 + speed01 * 90 + (gas ? 18 : 0), t, 0.08);
-  engGain.gain.setTargetAtTime(on ? (gas ? 0.09 : 0.04) : 0, t, 0.1);
+  engOsc.frequency.setTargetAtTime(42 + wheelSpeed01 * 120 + (gas ? 14 : 0), t, 0.06);
+  engGain.gain.setTargetAtTime(on ? (gas ? 0.09 : 0.035) : 0, t, 0.1);
+}
+let windSrc: AudioBufferSourceNode | null = null, windGain: GainNode | null = null;
+export function wind(level: number) {
+  if (!ctx) return;
+  if (!windSrc) {
+    const n = ctx.sampleRate * 2, buf = ctx.createBuffer(1, n, ctx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+    windSrc = ctx.createBufferSource(); windSrc.buffer = buf; windSrc.loop = true;
+    const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 500; f.Q.value = 0.6;
+    windGain = ctx.createGain(); windGain.gain.value = 0; windSrc.connect(f); f.connect(windGain); windGain.connect(master); windSrc.start();
+  }
+  windGain!.gain.setTargetAtTime(level * 0.12, ctx.currentTime, 0.4);
 }
 export function ufoHum(on: boolean, p = 0) {
   if (!ctx) return; const t = ctx.currentTime;
@@ -48,13 +61,17 @@ function noise(dur: number, vol = 0.2, freq = 800, delay = 0) {
 export const sfx = {
   click: () => tone(660, 0.08, 'square', 0.08),
   thump: (v = 1) => { tone(90, 0.12, 'sine', 0.25 * v, -50); noise(0.08, 0.12 * v, 500); },
+  knock: (v = 1) => { tone(180 + Math.random() * 60, 0.07, 'triangle', 0.16 * v, -80); noise(0.04, 0.08 * v, 1800); },
+  glass: () => { noise(0.25, 0.3, 6000); [1800, 2400, 3100].forEach((f, i) => tone(f, 0.25, 'sine', 0.06, -300, i * 0.03)); },
+  whistle: () => { tone(1500, 1.55, 'sine', 0.05, -1200); },
+  energy: () => { tone(440, 0.12, 'square', 0.08, 440); tone(880, 0.2, 'square', 0.08, 440, 0.08); },
   drop: () => { tone(300, 0.35, 'triangle', 0.2, -220); },
-  coin: () => { tone(880, 0.1, 'square', 0.1); tone(1320, 0.18, 'square', 0.1, 0, 0.08); },
+  coin: () => { tone(988, 0.07, 'square', 0.07); tone(1319, 0.14, 'square', 0.07, 0, 0.06); },
   boom: () => { noise(0.6, 0.5, 400); tone(70, 0.5, 'sine', 0.4, -40); },
   whoosh: () => { tone(900, 1.4, 'sawtooth', 0.04, -700); },
   splat: () => { noise(0.18, 0.25, 1500); tone(200, 0.15, 'sine', 0.15, 200); },
   squash: () => { noise(0.12, 0.2, 2000); tone(520, 0.12, 'square', 0.1, 300); },
-  land: () => { tone(120, 0.15, 'sine', 0.3, -60); },
+  land: (v = 1) => { tone(110, 0.18, 'sine', 0.15 + 0.25 * v, -60); noise(0.12, 0.08 + 0.15 * v, 400); },
   shield: () => { tone(500, 0.4, 'sine', 0.2, 500); tone(1000, 0.4, 'sine', 0.1, -500, 0.05); },
   turbo: () => { noise(0.5, 0.15, 3000); tone(200, 0.5, 'sawtooth', 0.08, 400); },
   win: () => { [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.25, 'triangle', 0.18, 0, i * 0.12)); },

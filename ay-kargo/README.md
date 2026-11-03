@@ -13,4 +13,5 @@ npm run build:portals  # dist/<portal>/ + dist/ay-kargo-<portal>.zip (crazygames
 - Game talks only to `src/platform/types.ts`; adapters live in `src/platform/`.
 - Save key: `aykargo.save.v1`. Strings: `src/i18n.ts` (en, de, fr, es, pt, tr, ru, ja).
 - Store texts and thumbnails: `store/`.
-- Controls: right half / Right Arrow / D = gas; left half / Left Arrow / A = brake & tilt; Space / W / on-screen bolt = turbo.
+- Controls: Right Arrow / D = gas, Left Arrow / A = brake & reverse (in the air both tilt the rover), Space / W / Up = turbo. Touch devices get semi-transparent pedals (brake bottom-left, gas bottom-right, turbo above gas); tapping anywhere on the left/right half also works.
+- `reference/prototype.html` is the approved prototype the physics constants come from; `reference/screens/` holds the prototype-vs-build comparison.

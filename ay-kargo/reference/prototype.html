@@ -1,0 +1,459 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ay Kargo taslağı</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: a 16:9 game window with HUD and touch pedals, then a short explainer strip. Single dark look on purpose. */
+:root{
+  --space:#070a14; --panel:#121827; --panel-2:#1b2337; --line:#2a3550;
+  --text:#eef1f8; --muted:#97a1b8; --coin:#fbbf24; --go:#22c55e; --ad:#38bdf8; --bad:#f87171;
+  --display:"Chakra Petch","Trebuchet MS",system-ui,sans-serif;
+  --body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  color-scheme:dark;
+}
+html,body{background:var(--space);color:var(--text)}
+body{font-family:var(--body);font-size:15px;line-height:1.5;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 40px}
+.wrap{max-width:1040px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+header h1{font-family:var(--display);font-weight:700;font-size:clamp(26px,4vw,38px);margin:0;letter-spacing:.02em}
+header p{margin:4px 0 0;color:var(--muted);max-width:68ch}
+.game{position:relative;width:100%;aspect-ratio:16/9;max-width:100%;border:1px solid var(--line);border-radius:16px;overflow:hidden;background:#05070f;touch-action:none;user-select:none;-webkit-user-select:none}
+[hidden]{display:none!important}
+canvas{display:block;width:100%;height:100%}
+.hud{position:absolute;left:12px;right:12px;top:10px;display:flex;gap:10px;align-items:center;pointer-events:none;font:700 clamp(12px,1.8vw,16px) var(--display);font-variant-numeric:tabular-nums}
+.chip{background:rgba(10,14,26,.72);border:1px solid var(--line);border-radius:10px;padding:4px 10px;display:flex;gap:6px;align-items:center}
+.bar{width:clamp(60px,12vw,130px);height:10px;border-radius:6px;background:#26314a;overflow:hidden}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,#22c55e,#a3e635);width:100%}
+.prog{flex:1;height:8px;border-radius:6px;background:#26314a;position:relative;min-width:40px}
+.prog i{position:absolute;left:0;top:0;bottom:0;background:var(--ad);border-radius:6px}
+.pedal{position:absolute;bottom:12px;width:clamp(64px,11vw,96px);height:clamp(64px,11vw,96px);border-radius:18px;border:2px solid rgba(255,255,255,.18);background:rgba(20,28,48,.55);display:grid;place-items:center;font:700 clamp(22px,3.5vw,32px) var(--display);color:var(--text);touch-action:none}
+.pedal.on{background:rgba(56,189,248,.35);border-color:var(--ad)}
+#brake{left:12px}#gas{right:12px}
+.overlay{position:absolute;inset:0;background:rgba(5,8,16,.78);display:flex;align-items:center;justify-content:center;padding:16px;z-index:5}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:clamp(14px,2.5vw,24px);width:min(560px,100%);max-height:100%;overflow:auto;display:flex;flex-direction:column;gap:12px}
+.card h2{font:700 clamp(20px,3vw,28px) var(--display);margin:0;text-wrap:balance}
+.card p{margin:0;color:var(--muted)}
+.row{display:flex;gap:10px;flex-wrap:wrap}
+.btn{font:600 15px var(--body);border-radius:12px;padding:11px 16px;border:1px solid var(--line);background:var(--panel-2);color:var(--text);cursor:pointer;flex:1 1 150px}
+.btn:focus-visible{outline:2px solid var(--ad);outline-offset:2px}
+.btn.go{background:var(--go);border-color:var(--go);color:#04210f}
+.btn.ad{border-color:var(--ad);color:var(--ad)}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.ups{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.up{background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:8px 10px;display:flex;flex-direction:column;gap:4px;cursor:pointer;text-align:left;color:var(--text);font:500 13px var(--body)}
+.up b{font:700 14px var(--display)}
+.pips{display:flex;gap:3px}.pips i{width:12px;height:6px;border-radius:2px;background:#2b3652}.pips i.f{background:var(--ad)}
+.up small{color:var(--coin);font-variant-numeric:tabular-nums}
+.up[disabled]{opacity:.5;cursor:not-allowed}
+.big{font:700 clamp(28px,5vw,40px) var(--display);color:var(--coin);font-variant-numeric:tabular-nums}
+.crates{font:700 18px var(--display)}
+.explain{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.step{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+.step h3{font:700 16px var(--display);margin:0 0 4px}.step p{margin:0;color:var(--muted)}
+.note{color:var(--muted);font-size:13px;max-width:78ch;margin:0}
+kbd{font:600 12px var(--display);border:1px solid var(--line);border-radius:5px;padding:0 5px;background:var(--panel-2)}
+@media (max-width:760px){.explain{grid-template-columns:1fr}.hud .hide-s{display:none}}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Ay Kargo</h1>
+    <p>Oynanabilir taslak. Kargo aracını engebeli Ay yüzeyinde sür, arkadaki gevşek kutuları düşürmeden teslim noktasına ulaştır. Kazandığın parayla aracı geliştir. Sağa: <kbd>→</kbd> / <kbd>D</kbd> gaz, sola: <kbd>←</kbd> / <kbd>A</kbd> fren ve geri. Telefonda alttaki pedallara bas.</p>
+  </header>
+
+  <div class="game" id="game">
+    <canvas id="cv" width="1280" height="720" aria-label="Oyun ekranı"></canvas>
+    <div class="hud">
+      <div class="chip">🔋<span class="bar"><i id="bat"></i></span></div>
+      <div class="chip">📦 <span id="hudCrates">3/3</span></div>
+      <div class="chip">⚡<span class="bar" style="width:clamp(40px,7vw,70px)"><i id="turbo" style="background:linear-gradient(90deg,#38bdf8,#a78bfa)"></i></span></div>
+      <div class="chip">🛡️ <span id="hudShield">0</span></div>
+      <div class="prog" aria-hidden="true"><i id="prog"></i></div>
+      <div class="chip hide-s"><span id="hudLevel">Bölüm 1</span></div>
+      <div class="chip">🪙 <span id="hudCoins">0</span></div>
+    </div>
+    <div class="pedal" id="brake" aria-label="Fren">◀</div>
+    <div class="pedal" id="gas" aria-label="Gaz">▶</div>
+    <div class="pedal" id="boostp" aria-label="Turbo" style="right:calc(24px + clamp(64px,11vw,96px));border-color:rgba(167,139,250,.5)">⚡</div>
+    <div class="overlay" id="ov"></div>
+  </div>
+
+  <section class="explain">
+    <div class="step"><h3>Sür ve kaç</h3><p>Gaz, fren ve turbo (<kbd>Boşluk</kbd> / <kbd>W</kbd> / ⚡). Havadayken gaz aracı geriye, fren öne çevirir. Kırmızı halka meteor düşeceği yer: ya hızlan ya fren yap.</p></div>
+    <div class="step"><h3>Kutuları koru</h3><p>Yeşil balçıklar yavaş çarparsan aracı yapışıp yavaşlatır, hızlı çarparsan ezilip para verir. UFO çekim ışınıyla kutu çalar, turboyla ışından kaç.</p></div>
+    <div class="step"><h3>Geliştir</h3><p>Motor, süspansiyon, lastik, batarya, kasa duvarı, ön tampon, kalkan ve turbo. Kalkan bir meteor isabetini emer.</p></div>
+  </section>
+  <p class="note">Taslakta tehlikeler hızlandırıldı: balçık 1. bölümde, meteor 2. bölümde, UFO 3. bölümde başlıyor. Gerçek oyunda daha kademeli olacak. 🎬 butonları gerçek oyunda portalın ödüllü reklamını açar, burada 1 saniyelik bir taklit.</p>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/planck@1.4.3/dist/planck.min.js"></script>
+<script>
+(function(){
+'use strict';
+const pl=window.planck, V=pl.Vec2;
+const cv=document.getElementById('cv'), cx=cv.getContext('2d');
+const W=1280,H=720,PPM=44;
+const $=id=>document.getElementById(id);
+
+// ---------- save ----------
+const KEY='aykargo.proto.v1';
+let save={coins:0,level:1,best:1,up:{motor:0,susp:0,tire:0,bat:0,bed:0}};
+try{const s=JSON.parse(localStorage.getItem(KEY)||'null');if(s&&s.up)save=s}catch(e){}
+function persist(){try{localStorage.setItem(KEY,JSON.stringify(save))}catch(e){}}
+['bump','shield','turbo'].forEach(k=>{if(save.up[k]==null)save.up[k]=0});
+
+const UPS=[
+  {k:'motor',n:'Motor',d:'Daha çok güç ve hız'},
+  {k:'susp',n:'Süspansiyon',d:'Daha yumuşak iniş'},
+  {k:'tire',n:'Lastik',d:'Daha iyi tutunma'},
+  {k:'bat',n:'Batarya',d:'Daha uzun yol'},
+  {k:'bed',n:'Kasa duvarı',d:'Kutular daha zor düşer'},
+  {k:'bump',n:'Ön tampon',d:'Balçığı daha kolay ezer'},
+  {k:'shield',n:'Kalkan',d:'Bölüm başına meteor kalkanı'},
+  {k:'turbo',n:'Turbo',d:'Daha uzun ve güçlü turbo'}];
+const MAXU=5;
+const upCost=lv=>Math.round(40*Math.pow(1.75,lv));
+
+// ---------- level ----------
+function rng(seed){return function(){seed=(seed*16807)%2147483647;return (seed-1)/2147483646}}
+function levelInfo(L){return {goal:110+L*35, rough:0.55+L*0.18, crates:3, slimes:4+L*2, meteors:L>=2, meteorGap:Math.max(2.2,5-L*0.3), ufo:L>=3}}
+
+let world,car,wheels=[],joints=[],crates=[],ground=[],goalX=0,state='menu';
+let slimes=[],meteors=[],craters2=[],booms=[],pops=[],ufo=null,turbo=1,shields=0,bonusShield=0,meteorT=3,ufoT=6,stickT=0,hitQueue=[],earned=0,shieldFlash=0;
+let battery=1,batteryMax=1,startX=0,flipT=0,recharged=false,result=null,cam={x:0,y:0},dust=[],shake=0;
+
+function buildTerrain(L){
+  const info=levelInfo(L), r=rng(1000+L*7919);
+  const pts=[]; const step=2.0;
+  const phases=[r()*6,r()*6,r()*6];
+  const end=info.goal+40;
+  for(let x=-20;x<=end;x+=step){
+    let y=0;
+    if(x>12&&x<info.goal-4){
+      const a=info.rough*Math.min(1,(x-12)/30);
+      y=a*(Math.sin(x*0.09+phases[0])*2.2+Math.sin(x*0.23+phases[1])*0.9+Math.sin(x*0.53+phases[2])*0.35);
+      y+=Math.sin(x*0.018)*a*1.5;
+    }
+    pts.push(V(x,y));
+  }
+  // smooth start/goal pads
+  return {pts,goal:info.goal};
+}
+
+function newRun(){
+  const L=save.level, u=save.up;
+  world=new pl.World({gravity:V(0,-6.2)});
+  const t=buildTerrain(L); goalX=t.goal; ground=t.pts;
+  const g=world.createBody();
+  g.createFixture(pl.Chain(ground,false),{friction:0.9});
+  g.setUserData('ground');
+  // walls at ends
+  g.createFixture(pl.Edge(V(-20,0),V(-20,30)));
+  g.createFixture(pl.Edge(V(ground[ground.length-1].x,0),V(ground[ground.length-1].x,30)));
+
+  const x0=0,y0=2.2;
+  car=world.createBody({type:'dynamic',position:V(x0,y0)});
+  car.createFixture(pl.Box(1.35,0.18,V(0,0),0),{density:1.4,friction:0.6});           // floor
+  car.createFixture(pl.Box(0.42,0.38,V(0.95,0.52),0),{density:0.6,friction:0.5});   // cabin
+  const wallH=0.4+u.bed*0.1;
+  car.createFixture(pl.Box(0.06,wallH/2,V(-1.33,0.18+wallH/2),0),{density:0.3,friction:0.4}); // back wall
+  car.createFixture(pl.Box(0.06,wallH/2,V(0.48,0.18+wallH/2),0),{density:0.3,friction:0.4});  // front wall of bed
+  car.wallH=wallH;
+
+  const tireFr=0.75+u.tire*0.14, freq=3.2+u.susp*0.45, damp=0.55+u.susp*0.06;
+  const torque=7+u.motor*2.2;
+  wheels=[];joints=[];
+  [[-0.95,-0.42],[0.95,-0.42]].forEach(([wx,wy])=>{
+    const w=world.createBody({type:'dynamic',position:V(x0+wx,y0+wy)});
+    w.createFixture(pl.Circle(0.42),{density:1.1,friction:tireFr,restitution:0.05});
+    const j=world.createJoint(pl.WheelJoint({motorSpeed:0,maxMotorTorque:torque,enableMotor:false,frequencyHz:freq,dampingRatio:damp},car,w,w.getPosition(),V(0,1)));
+    wheels.push(w);joints.push(j);
+  });
+  crates=[];
+  const n=levelInfo(L).crates;
+  for(let i=0;i<n;i++){
+    const c=world.createBody({type:'dynamic',position:V(x0-1.0+i*0.5,y0+0.45+(i%2)*0.02)});
+    c.createFixture(pl.Box(0.22,0.22),{density:0.35,friction:0.55,restitution:0.05});
+    c.lost=false;crates.push(c);
+  }
+  car.setUserData('car');wheels.forEach(w=>w.setUserData('car'));
+  // slimes
+  slimes=[];const info=levelInfo(L),rs=rng(555+L*31);
+  for(let i=0;i<info.slimes;i++){
+    const sx=18+rs()*(info.goal-30);const gy=groundAt(sx);
+    const s=world.createBody({type:'dynamic',position:V(sx,gy+0.3),fixedRotation:false});
+    s.createFixture(pl.Box(0.3,0.24),{density:0.5,friction:0.9});
+    s.setUserData('slime');s.phase=rs()*6;s.dead=false;slimes.push(s);
+  }
+  hitQueue=[];
+  world.on('begin-contact',ct=>{const a=ct.getFixtureA().getBody(),b=ct.getFixtureB().getBody();
+    const ua=a.getUserData(),ub=b.getUserData();
+    if(ua==='slime'&&ub==='car')hitQueue.push(a);else if(ub==='slime'&&ua==='car')hitQueue.push(b)});
+  meteors=[];craters2=[];booms=[];pops=[];ufo=null;turbo=1;stickT=0;earned=0;
+  shields=u.shield+bonusShield;bonusShield=0;meteorT=3.5;ufoT=7;
+  batteryMax=140+u.bat*45;battery=batteryMax;startX=x0;flipT=0;recharged=false;dust=[];
+  cam.x=x0;cam.y=y0;
+  state='drive';hideOv();
+}
+
+// ---------- input ----------
+const keys={gas:false,brake:false,boost:false};
+const isBoost=e=>e.key===' '||e.key==='w'||e.key==='W'||e.key==='ArrowUp';
+addEventListener('keydown',e=>{if(e.key==='ArrowRight'||e.key==='d'||e.key==='D'){keys.gas=true;e.preventDefault()}if(e.key==='ArrowLeft'||e.key==='a'||e.key==='A'){keys.brake=true;e.preventDefault()}if(isBoost(e)&&state==='drive'){keys.boost=true;e.preventDefault()}});
+addEventListener('keyup',e=>{if(e.key==='ArrowRight'||e.key==='d'||e.key==='D')keys.gas=false;if(e.key==='ArrowLeft'||e.key==='a'||e.key==='A')keys.brake=false;if(isBoost(e))keys.boost=false});
+function pedal(id,k){const el=$(id);
+  const on=e=>{e.preventDefault();keys[k]=true;el.classList.add('on')}, off=()=>{keys[k]=false;el.classList.remove('on')};
+  el.addEventListener('pointerdown',on);el.addEventListener('pointerup',off);el.addEventListener('pointerleave',off);el.addEventListener('pointercancel',off)}
+pedal('gas','gas');pedal('brake','brake');pedal('boostp','boost');
+function groundAt(x){for(let i=1;i<ground.length;i++){if(ground[i].x>=x){const a=ground[i-1],b=ground[i];return a.y+(b.y-a.y)*(x-a.x)/(b.x-a.x)}}return 0}
+function pop(x,y,t,c){pops.push({x,y,t,c:c||'#fbbf24',life:1})}
+
+// ---------- sim ----------
+function wheelsGrounded(){let n=0;for(const w of wheels){for(let ce=w.getContactList();ce;ce=ce.next){if(ce.contact.isTouching()&&ce.other.getUserData()==='ground'){n++;break}}}return n}
+function step(dt){
+  const u=save.up, maxSpd=13+u.motor*2.6;
+  const drive=battery>0;
+  let ms=0,en=false;
+  if(keys.gas&&drive){ms=-maxSpd;en=true}
+  else if(keys.brake&&drive){ms=maxSpd*0.55;en=true}
+  else{en=true;ms=0;}
+  joints.forEach(j=>{j.enableMotor(en);j.setMotorSpeed(ms);j.setMaxMotorTorque(keys.gas||keys.brake?7+u.motor*2.2:0.6)});
+  const air=wheelsGrounded()===0;
+  if(air){if(keys.gas)car.applyTorque(2.2,true);if(keys.brake)car.applyTorque(-2.2,true)}
+  if(keys.gas||keys.brake)battery=Math.max(0,battery-dt*(keys.gas?3.5:2));
+  // turbo
+  const tDur=1.4+u.turbo*0.35;
+  if(keys.boost&&turbo>0){turbo=Math.max(0,turbo-dt/tDur);const f=car.getWorldVector(V(26+u.turbo*4,0));car.applyForceToCenter(f,true);
+    if(Math.random()<0.8){const bp=car.getWorldPoint(V(-1.4,0.1));dust.push({x:bp.x,y:bp.y,vx:-4-Math.random()*3,vy:(Math.random()-0.5),life:0.7,hot:true})}}
+  else turbo=Math.min(1,turbo+dt*0.12);
+  // sticky slime slowdown
+  if(stickT>0){stickT-=dt;const v=car.getLinearVelocity();car.setLinearVelocity(V(v.x*(1-dt*2.2),v.y))}
+  world.step(dt,8,3);
+
+  const p=car.getPosition(), a=car.getAngle();
+  const info=levelInfo(save.level);
+  // slime hits
+  hitQueue.forEach(s=>{if(s.dead)return;const sp=car.getLinearVelocity().x;const need=6.5-u.bump*0.8;
+    if(sp>need||keys.boost&&turbo>0){s.dead=true;const q=s.getPosition();world.destroyBody(s);earned+=3;pop(q.x,q.y+0.6,'+3','#a3e635');shake=Math.max(shake,3)}
+    else{stickT=1.2;s.stuck=true}});
+  hitQueue=[];
+  slimes=slimes.filter(s=>!s.dead);
+  slimes.forEach(s=>{s.phase+=dt*3;const sp=s.getPosition();if(Math.abs(sp.x-p.x)<14&&Math.random()<0.01){s.applyLinearImpulse(V((p.x<sp.x?-0.25:0.25),0.7),sp,true)}});
+  // meteors
+  if(info.meteors){meteorT-=dt;if(meteorT<=0){meteorT=info.meteorGap*(0.7+Math.random()*0.6);const v=car.getLinearVelocity().x;
+      const tx=p.x+Math.max(4,v*1.6)+(Math.random()*8-3);meteors.push({x:tx,t:1.6})}}
+  meteors.forEach(m=>{m.t-=dt;if(m.t<=0&&!m.done){m.done=true;const gy=groundAt(m.x);booms.push({x:m.x,y:gy,life:1});craters2.push({x:m.x,r:0.9+Math.random()*0.5});shake=10;
+      const d=Math.abs(car.getPosition().x-m.x);
+      if(d<2.4){if(shields>0){shields--;shieldFlash=1;pop(p.x,p.y+1.6,'🛡️','#38bdf8')}
+        else{car.applyLinearImpulse(V((p.x-m.x)*0.6,3.2),car.getWorldPoint(V(-0.15,0)),true);crates.forEach(c=>{if(!c.lost)c.applyLinearImpulse(V((Math.random()-0.5)*0.25,0.32+Math.random()*0.12),c.getPosition(),true)})}}
+      slimes.forEach(s=>{if(!s.dead&&Math.abs(s.getPosition().x-m.x)<2){s.dead=true;world.destroyBody(s)}})}});
+  meteors=meteors.filter(m=>!m.done);
+  booms.forEach(b=>b.life-=dt*1.6);booms=booms.filter(b=>b.life>0);
+  pops.forEach(o=>{o.life-=dt;o.y+=dt*1.2});pops=pops.filter(o=>o.life>0);
+  if(shieldFlash>0)shieldFlash-=dt*2;
+  // UFO
+  if(info.ufo){
+    if(!ufo){ufoT-=dt;if(ufoT<=0&&p.x<goalX-25){ufo={x:p.x-14,y:p.y+6,beam:0,target:null,life:12,leaving:false}}}
+    else{
+      const spd=5.2;ufo.life-=dt;
+      if(ufo.life<=0||p.x>goalX-8)ufo.leaving=true;
+      if(ufo.leaving){ufo.y+=dt*6;ufo.x+=dt*4;if(ufo.y>p.y+20){ufo=null;ufoT=10+Math.random()*6}}
+      else{
+        const tx=p.x-0.4, dx=tx-ufo.x;ufo.x+=Math.sign(dx)*Math.min(Math.abs(dx),spd*dt);ufo.y+=((groundAt(ufo.x)+5.2)-ufo.y)*dt*2;
+        const over=Math.abs(dx)<1.0;
+        if(over){ufo.beam=Math.min(1,ufo.beam+dt*1.5);
+          if(!ufo.target||ufo.target.lost){ufo.target=crates.filter(c=>!c.lost).sort((a,b)=>b.getPosition().x-a.getPosition().x)[0]||null}
+          const c=ufo.target;
+          if(c&&ufo.beam>0.6){const cp=c.getPosition();if(Math.abs(cp.x-ufo.x)<1.3){c.applyForceToCenter(V((ufo.x-cp.x)*0.6,1.15),true);
+            if(cp.y>ufo.y-0.8){c.lost=true;world.destroyBody(c);c.gone=true;pop(ufo.x,ufo.y,'-📦','#f87171');ufo.leaving=true}}}}
+        else ufo.beam=Math.max(0,ufo.beam-dt*2.5);
+      }
+    }
+  }
+  // crates
+  crates.forEach(c=>{if(c.lost)return;const cp=c.getPosition();const lp=car.getLocalPoint(cp);
+    if(lp.x<-2.2||lp.x>1.6||lp.y<-1.2||lp.y>3.2){if(Math.hypot(cp.x-p.x,cp.y-p.y)>3.2){c.lost=true;shake=6}}});
+  // dust
+  if(!air&&keys.gas&&Math.random()<0.6){const w=wheels[0].getPosition();dust.push({x:w.x-0.3,y:w.y-0.35,vx:-1-Math.random()*2,vy:Math.random()*1.5,life:1})}
+  dust.forEach(d=>{d.x+=d.vx*dt;d.y+=d.vy*dt;d.vy-=1.2*dt;d.life-=dt*1.4});dust=dust.filter(d=>d.life>0);
+  // fail/win
+  const upside=Math.cos(a)<-0.2;
+  flipT=upside?flipT+dt:0;
+  const alive=crates.filter(c=>!c.lost).length;
+  if(p.x>=goalX){finish(true,'');return}
+  if(flipT>1.4){finish(false,'Araç ters döndü');return}
+  if(alive===0){finish(false,'Tüm kargo düştü');return}
+  if(battery<=0&&car.getLinearVelocity().length()<0.3){
+    if(!recharged){state='battery';showBattery();return}
+    finish(false,'Batarya bitti');return}
+}
+
+function finish(win,why){
+  const alive=crates.filter(c=>!c.lost).length, total=crates.length;
+  const dist=Math.max(0,Math.round(car.getPosition().x-startX));
+  let coins=0;
+  if(win)coins=alive*12*save.level+Math.round(dist*0.25)+earned;
+  else coins=Math.round(dist*0.25)+earned;
+  result={win,why,alive,total,dist,coins,doubled:false};
+  state='result';showResult();
+}
+
+// ---------- render ----------
+const starsBg=Array.from({length:140},()=>({x:Math.random()*W,y:Math.random()*H*0.7,s:Math.random()*1.6+0.3,p:Math.random()*0.5+0.1}));
+const craters=(()=>{const r=rng(77);return Array.from({length:120},()=>({x:r()*1200-20,d:r()*5+1.2,s:r()*0.7+0.25}))})();
+function wx(x){return (x-cam.x)*PPM+W*0.38}
+function wy(y){return H*0.62-(y-cam.y)*PPM}
+function groundY(x){for(let i=1;i<ground.length;i++){if(ground[i].x>=x){const a=ground[i-1],b=ground[i];return a.y+(b.y-a.y)*(x-a.x)/(b.x-a.x)}}return 0}
+
+function draw(){
+  const sk=shake>0?(Math.random()-0.5)*shake:0;shake=Math.max(0,shake-0.5);
+  cx.save();cx.translate(sk,sk*0.6);
+  const g=cx.createLinearGradient(0,0,0,H);g.addColorStop(0,'#04060d');g.addColorStop(1,'#141a2e');cx.fillStyle=g;cx.fillRect(-10,-10,W+20,H+20);
+  for(const s of starsBg){const x=((s.x-cam.x*PPM*s.p*0.05)%W+W)%W;cx.fillStyle='rgba(230,236,255,'+(0.35+s.p)+')';cx.fillRect(x,s.y,s.s,s.s)}
+  // earth
+  const ex=W*0.8-cam.x*0.6%60, ey=120;
+  const eg=cx.createRadialGradient(ex-18,ey-18,8,ex,ey,60);eg.addColorStop(0,'#7dd3fc');eg.addColorStop(0.6,'#2563eb');eg.addColorStop(1,'#1e3a8a');
+  cx.fillStyle=eg;cx.beginPath();cx.arc(W*0.8,ey,56,0,7);cx.fill();
+  cx.fillStyle='rgba(74,222,128,.55)';cx.beginPath();cx.ellipse(W*0.8-14,ey+6,18,11,0.6,0,7);cx.fill();cx.beginPath();cx.ellipse(W*0.8+22,ey-18,12,7,-.3,0,7);cx.fill();
+  // far hills
+  cx.fillStyle='#1d2335';cx.beginPath();cx.moveTo(0,H);
+  for(let x=0;x<=W;x+=20){const wxv=(x/PPM)+cam.x*0.3;cx.lineTo(x,H*0.55+Math.sin(wxv*0.15)*40+Math.sin(wxv*0.05)*60)}cx.lineTo(W,H);cx.fill();
+  if(!world){cx.restore();return}
+  // ground
+  cx.beginPath();cx.moveTo(wx(ground[0].x),H+50);
+  for(const p of ground){cx.lineTo(wx(p.x),wy(p.y))}
+  cx.lineTo(wx(ground[ground.length-1].x),H+50);cx.closePath();
+  const gg=cx.createLinearGradient(0,H*0.4,0,H);gg.addColorStop(0,'#9aa1ad');gg.addColorStop(1,'#4b5263');cx.fillStyle=gg;cx.fill();
+  cx.strokeStyle='#d6dae3';cx.lineWidth=3;cx.beginPath();ground.forEach((p,i)=>i?cx.lineTo(wx(p.x),wy(p.y)):cx.moveTo(wx(p.x),wy(p.y)));cx.stroke();
+  for(const c of craters){const gyv=groundY(c.x);const sx=wx(c.x),sy=wy(gyv)+18+c.d*4;if(sx<-60||sx>W+60)continue;cx.fillStyle='rgba(60,66,80,.45)';cx.beginPath();cx.ellipse(sx,sy,c.d*6*c.s+6,c.d*2*c.s+2,0,0,7);cx.fill()}
+  // goal pad
+  const gx=wx(goalX),gy=wy(groundY(goalX));
+  cx.fillStyle='#334155';cx.fillRect(gx-10,gy-6,180,10);cx.fillStyle='#22c55e';cx.fillRect(gx-10,gy-8,180,4);
+  cx.strokeStyle='#e2e8f0';cx.lineWidth=4;cx.beginPath();cx.moveTo(gx,gy-6);cx.lineTo(gx,gy-110);cx.stroke();
+  cx.fillStyle='#38bdf8';cx.beginPath();cx.moveTo(gx,gy-110);cx.lineTo(gx+56,gy-96);cx.lineTo(gx,gy-82);cx.fill();
+  // dust
+  // craters from meteors
+  for(const c of craters2){const sx=wx(c.x),sy=wy(groundAt(c.x));cx.fillStyle='rgba(30,34,46,.85)';cx.beginPath();cx.ellipse(sx,sy+4,c.r*PPM,c.r*PPM*0.32,0,0,7);cx.fill()}
+  // slimes
+  for(const s of slimes){if(s.dead)continue;const q=s.getPosition();const sx=wx(q.x),sy=wy(q.y);if(sx<-80||sx>W+80)continue;const sq=1+Math.sin(s.phase)*0.08;
+    cx.save();cx.translate(sx,sy);cx.rotate(-s.getAngle());cx.scale(1/sq,sq);
+    cx.fillStyle='#65d84b';cx.beginPath();cx.ellipse(0,2,0.34*PPM,0.27*PPM,0,0,7);cx.fill();
+    cx.fillStyle='rgba(255,255,255,.35)';cx.beginPath();cx.ellipse(-5,-4,5,3,-.4,0,7);cx.fill();
+    cx.fillStyle='#0b1020';cx.beginPath();cx.arc(-5,0,3.2,0,7);cx.arc(6,0,3.2,0,7);cx.fill();
+    cx.strokeStyle='#65d84b';cx.lineWidth=2;cx.beginPath();cx.moveTo(-3,-10);cx.lineTo(-6,-18);cx.moveTo(4,-10);cx.lineTo(7,-18);cx.stroke();
+    cx.fillStyle='#f472b6';cx.beginPath();cx.arc(-6,-18,2.5,0,7);cx.arc(7,-18,2.5,0,7);cx.fill();cx.restore()}
+  // meteor warnings + falling meteors
+  for(const m of meteors){const gy=groundAt(m.x);const sx=wx(m.x),sy=wy(gy);const pulse=0.5+0.5*Math.sin(performance.now()/90);
+    cx.strokeStyle='rgba(248,113,113,'+(0.5+pulse*0.5)+')';cx.lineWidth=3;cx.beginPath();cx.ellipse(sx,sy,2.4*PPM*(0.6+0.4*(1-m.t/1.6)),12,0,0,7);cx.stroke();
+    cx.fillStyle='rgba(248,113,113,.15)';cx.fill();
+    if(m.t<0.8){const k2=m.t/0.8;const mx=sx+k2*260,my=sy-k2*560;cx.strokeStyle='rgba(251,146,60,.6)';cx.lineWidth=10;cx.beginPath();cx.moveTo(mx,my);cx.lineTo(mx+60,my-120);cx.stroke();
+      const mg=cx.createRadialGradient(mx,my,2,mx,my,22);mg.addColorStop(0,'#fff7cc');mg.addColorStop(.5,'#fb923c');mg.addColorStop(1,'#7c2d12');cx.fillStyle=mg;cx.beginPath();cx.arc(mx,my,20,0,7);cx.fill()}}
+  for(const b of booms){const sx=wx(b.x),sy=wy(b.y);const r=(1-b.life)*150+20;cx.fillStyle='rgba(251,146,60,'+(b.life*0.7)+')';cx.beginPath();cx.arc(sx,sy,r,0,7);cx.fill();cx.fillStyle='rgba(255,247,204,'+b.life+')';cx.beginPath();cx.arc(sx,sy,r*0.45,0,7);cx.fill()}
+  for(const d of dust){cx.fillStyle=d.hot?'rgba(167,139,250,'+(d.life*0.8)+')':'rgba(210,214,224,'+(d.life*0.5)+')';cx.beginPath();cx.arc(wx(d.x),wy(d.y),4+(1-d.life)*8,0,7);cx.fill()}
+  // crates
+  for(const c of crates){if(c.gone)continue;const p=c.getPosition();cx.save();cx.translate(wx(p.x),wy(p.y));cx.rotate(-c.getAngle());
+    const s=0.22*PPM;cx.fillStyle=c.lost?'#7c5a3a':'#d0913f';cx.fillRect(-s,-s,2*s,2*s);cx.strokeStyle='#6b3f17';cx.lineWidth=2;cx.strokeRect(-s,-s,2*s,2*s);
+    cx.beginPath();cx.moveTo(-s,-s);cx.lineTo(s,s);cx.moveTo(s,-s);cx.lineTo(-s,s);cx.stroke();cx.restore()}
+  // car
+  const cp=car.getPosition(),ca=car.getAngle();
+  cx.save();cx.translate(wx(cp.x),wy(cp.y));cx.rotate(-ca);
+  const k=PPM;
+  // suspension struts
+  cx.strokeStyle='#64748b';cx.lineWidth=5;
+  wheels.forEach(w=>{const lp=car.getLocalPoint(w.getPosition());cx.beginPath();cx.moveTo(lp.x*k,0);cx.lineTo(lp.x*k,-lp.y*k);cx.stroke()});
+  cx.fillStyle='#e5e7eb';cx.fillRect(-1.35*k,-0.18*k,2.7*k,0.36*k);
+  cx.fillStyle='#f97316';cx.fillRect(-1.35*k,-0.18*k,2.7*k,0.1*k);
+  cx.fillStyle='#cbd5e1';
+  cx.fillRect(-1.39*k,-(0.18+car.wallH)*k,0.12*k,car.wallH*k);cx.fillRect(0.42*k,-(0.18+car.wallH)*k,0.12*k,car.wallH*k);
+  // cabin
+  cx.fillStyle='#f1f5f9';cx.beginPath();cx.roundRect?cx.roundRect(0.53*k,-0.9*k,0.84*k,0.76*k,8):cx.rect(0.53*k,-0.9*k,0.84*k,0.76*k);cx.fill();
+  cx.fillStyle='#38bdf8';cx.fillRect(0.82*k,-0.8*k,0.46*k,0.32*k);
+  cx.fillStyle='#f97316';cx.fillRect(0.53*k,-0.3*k,0.84*k,0.08*k);
+  cx.strokeStyle='#94a3b8';cx.lineWidth=2;cx.beginPath();cx.moveTo(0.7*k,-0.9*k);cx.lineTo(0.62*k,-1.35*k);cx.stroke();
+  cx.fillStyle='#f43f5e';cx.beginPath();cx.arc(0.62*k,-1.35*k,4,0,7);cx.fill();
+  cx.restore();
+  wheels.forEach(w=>{const p=w.getPosition();cx.save();cx.translate(wx(p.x),wy(p.y));cx.rotate(-w.getAngle());
+    cx.fillStyle='#1f2937';cx.beginPath();cx.arc(0,0,0.42*k,0,7);cx.fill();
+    cx.fillStyle='#94a3b8';cx.beginPath();cx.arc(0,0,0.2*k,0,7);cx.fill();
+    cx.strokeStyle='#475569';cx.lineWidth=3;for(let i=0;i<3;i++){cx.beginPath();cx.moveTo(0,0);const an=i*2.094;cx.lineTo(Math.cos(an)*0.36*k,Math.sin(an)*0.36*k);cx.stroke()}
+    cx.restore()});
+  if(shields>0||shieldFlash>0){const cp2=car.getPosition();cx.strokeStyle='rgba(56,189,248,'+(0.35+Math.max(0,shieldFlash)*0.6)+')';cx.lineWidth=3+Math.max(0,shieldFlash)*6;cx.beginPath();cx.arc(wx(cp2.x),wy(cp2.y)+6,1.9*PPM,0,7);cx.stroke()}
+  if(ufo){const ux=wx(ufo.x),uy=wy(ufo.y);
+    if(ufo.beam>0){const gy=wy(groundAt(ufo.x));const bg=cx.createLinearGradient(0,uy,0,gy);bg.addColorStop(0,'rgba(163,230,53,'+(0.55*ufo.beam)+')');bg.addColorStop(1,'rgba(163,230,53,0)');
+      cx.fillStyle=bg;cx.beginPath();cx.moveTo(ux-26,uy+10);cx.lineTo(ux+26,uy+10);cx.lineTo(ux+1.3*PPM,gy);cx.lineTo(ux-1.3*PPM,gy);cx.closePath();cx.fill()}
+    cx.fillStyle='rgba(125,211,252,.85)';cx.beginPath();cx.ellipse(ux,uy-10,28,22,0,Math.PI,0);cx.fill();
+    cx.fillStyle='#94a3b8';cx.beginPath();cx.ellipse(ux,uy,70,18,0,0,7);cx.fill();
+    cx.fillStyle='#475569';cx.beginPath();cx.ellipse(ux,uy+6,46,9,0,0,7);cx.fill();
+    for(let i=0;i<5;i++){cx.fillStyle=(Math.floor(performance.now()/150)+i)%2?'#facc15':'#f472b6';cx.beginPath();cx.arc(ux-48+i*24,uy+1,4,0,7);cx.fill()}
+    cx.fillStyle='#65d84b';cx.beginPath();cx.arc(ux,uy-14,9,0,7);cx.fill();cx.fillStyle='#0b1020';cx.beginPath();cx.arc(ux-3,uy-15,2,0,7);cx.arc(ux+3,uy-15,2,0,7);cx.fill()}
+  cx.font='700 26px Chakra Petch, sans-serif';cx.textAlign='center';
+  for(const o of pops){cx.fillStyle=o.c;cx.globalAlpha=Math.max(0,o.life);cx.fillText(o.t,wx(o.x),wy(o.y));cx.globalAlpha=1}
+  cx.restore();
+}
+
+function hud(){
+  if(!world)return;
+  $('bat').style.width=(battery/batteryMax*100)+'%';
+  $('bat').style.background=battery/batteryMax<0.25?'#f87171':'';
+  const alive=crates.filter(c=>!c.lost).length;$('hudCrates').textContent=alive+'/'+crates.length;
+  $('turbo').style.width=(turbo*100)+'%';$('hudShield').textContent=shields;
+  const pr=Math.min(1,Math.max(0,(car.getPosition().x-startX)/(goalX-startX)));$('prog').style.width=(pr*100)+'%';
+}
+function hudStatic(){$('hudLevel').textContent='Bölüm '+save.level;$('hudCoins').textContent=save.coins}
+
+// ---------- screens ----------
+const ov=$('ov');
+function hideOv(){ov.hidden=true}
+function showOv(html){ov.innerHTML='<div class="card">'+html+'</div>';ov.hidden=false}
+function fakeAd(cb){showOv('<h2>Reklam oynuyor</h2><p>Gerçek oyunda burada portalın ödüllü videosu çıkar. Taslakta 1 saniyelik taklit.</p>');setTimeout(cb,1000)}
+
+function showMenu(){
+  state='menu';hudStatic();
+  showOv('<h2>Bölüm '+save.level+'</h2><p>'+levelInfo(save.level).goal+' metre ileride teslim noktası var. Kutuların hepsi teslim edilirse en çok para kazanırsın.'+(levelInfo(save.level).meteors?' Dikkat: meteor yağmuru'+(levelInfo(save.level).ufo?' ve UFO':'')+' var.':'')+'</p>'+
+    '<div class="row"><button class="btn go" id="bStart">Sür</button><button class="btn ad" id="bShield">Kalkanla başla 🎬</button></div><div class="row"><button class="btn" id="bGarage">Garaj</button></div>');
+  $('bStart').onclick=newRun;$('bShield').onclick=()=>fakeAd(()=>{bonusShield=1;newRun()});$('bGarage').onclick=showGarage;$('bStart').focus();
+}
+function showGarage(){
+  state='garage';hudStatic();
+  const items=UPS.map(u=>{const lv=save.up[u.k],c=upCost(lv),max=lv>=MAXU;
+    return '<button class="up" data-k="'+u.k+'" '+((max||save.coins<c)?'disabled':'')+'><b>'+u.n+'</b><span class="pips">'+Array.from({length:MAXU},(_,i)=>'<i class="'+(i<lv?'f':'')+'"></i>').join('')+'</span><span style="color:var(--muted)">'+u.d+'</span><small>'+(max?'MAKS':('🪙 '+c))+'</small></button>'}).join('');
+  showOv('<h2>Garaj</h2><p>Paran: <b style="color:var(--coin)">🪙 '+save.coins+'</b></p><div class="ups">'+items+'</div><div class="row"><button class="btn go" id="bBack">Bölüme dön</button></div>');
+  ov.querySelectorAll('.up').forEach(b=>b.onclick=()=>{const k=b.dataset.k,c=upCost(save.up[k]);if(save.coins>=c&&save.up[k]<MAXU){save.coins-=c;save.up[k]++;persist();showGarage()}});
+  $('bBack').onclick=showMenu;
+}
+function showBattery(){
+  showOv('<h2>Batarya bitti</h2><p>Bir kereye mahsus şarj edip kaldığın yerden devam edebilirsin.</p><div class="row"><button class="btn go" id="bGive">Bitir</button><button class="btn ad" id="bCharge">Şarj et ve devam 🎬</button></div>');
+  $('bGive').onclick=()=>{recharged=true;finish(false,'Batarya bitti')};
+  $('bCharge').onclick=()=>fakeAd(()=>{recharged=true;battery=batteryMax*0.5;state='drive';hideOv()});
+}
+function showResult(){
+  const r=result;
+  if(!r.doubled){save.coins+=r.coins;if(r.win){save.level=Math.min(10,save.level+(save.level<10?1:0));if(r.win&&save.level>save.best)save.best=save.level}persist()}
+  hudStatic();
+  const crateIcons='📦'.repeat(r.alive)+'<span style="opacity:.3">'+'📦'.repeat(r.total-r.alive)+'</span>';
+  showOv('<h2>'+(r.win?'Teslim edildi!':'Teslimat başarısız')+'</h2>'+(r.win?'':'<p>'+r.why+'</p>')+
+    (r.win?'<div class="crates">'+crateIcons+'</div>':'')+
+    '<div class="big">+'+r.coins+' 🪙</div><p>Mesafe: '+r.dist+' m</p>'+
+    '<div class="row"><button class="btn go" id="bNext">'+(r.win?'Sonraki bölüm':'Tekrar dene')+'</button>'+
+    (r.doubled||r.coins===0?'':'<button class="btn ad" id="bDouble">Parayı 2 katına çıkar 🎬</button>')+'</div>'+
+    '<div class="row"><button class="btn" id="bGarage2">Garaj</button></div>');
+  $('bNext').onclick=showMenu;$('bGarage2').onclick=showGarage;
+  const d=$('bDouble');if(d)d.onclick=()=>fakeAd(()=>{save.coins+=r.coins;r.coins*=2;r.doubled=true;persist();showResult()});
+}
+
+// ---------- loop ----------
+let last=performance.now(),acc=0;const DT=1/60;
+function frame(now){
+  const el=Math.min(0.1,(now-last)/1000);last=now;
+  if(state==='drive'){acc+=el;while(acc>=DT&&state==='drive'){step(DT);acc-=DT}
+    const p=car.getPosition(),v=car.getLinearVelocity();cam.x+=(p.x+v.x*0.25-cam.x)*0.12;cam.y+=(p.y-cam.y)*0.08;hud()}
+  else acc=0;
+  draw();requestAnimationFrame(frame);
+}
+if(!pl){showOv('<h2>Fizik kütüphanesi yüklenemedi</h2><p>Sayfayı yenile.</p>');return}
+// preview world behind the menu
+(function(){const lv=save.level;world=null;})();
+showMenu();requestAnimationFrame(frame);
+})();
+</script>
