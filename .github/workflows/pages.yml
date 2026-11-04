@@ -1,10 +1,11 @@
-name: Deploy ay-kargo to Pages
+name: Deploy games to Pages
 
 on:
   push:
     branches: [main]
     paths:
       - 'ay-kargo/**'
+      - 'zip-sucuk/**'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
@@ -26,13 +27,19 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: ay-kargo/package-lock.json
+          cache-dependency-path: |
+            ay-kargo/package-lock.json
+            zip-sucuk/package-lock.json
+      # ay-kargo stays at the site root (existing link), each other game gets its own sub-folder
       - name: Build
-        run: cd ay-kargo && npm ci && VITE_PORTAL=none npm run build
+        run: |
+          (cd ay-kargo && npm ci && VITE_PORTAL=none npm run build)
+          (cd zip-sucuk && npm ci && VITE_PORTAL=none npm run build)
+          mkdir -p site && cp -r ay-kargo/dist/. site/ && mkdir -p site/zip-sucuk && cp -r zip-sucuk/dist/. site/zip-sucuk/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: ay-kargo/dist
+          path: site
 
   deploy:
     needs: build

@@ -26,3 +26,12 @@ Decisions already made for this repo. Add new ones at the end with a date and a 
 
 15. **Project-level Claude Code setup committed to the repo:** skills in `.claude/skills/` (webapp-testing, frontend-design, algorithmic-art, canvas-design from anthropics/skills; game-qa adapted from game-creator; graphify), Playwright MCP in `.mcp.json` pinned to `@playwright/mcp@0.0.83` (published 2026-09-28, at least two weeks old when pinned). No reliance on user-level config.
 16. **Testing is local only.** No test service, telemetry or uploads; test hooks belong in dev/test builds only (`window.__GAME__`, `render_game_to_text()`).
+
+## Zip Sucuk / Sucuk Hop (2026-11-04)
+
+17. **Second game: `zip-sucuk/`**, a web game inspired by "a weird game about sausage" (Madman's Cheese, Steam, 2026): one-button physics with an elastic sausage. Original name, art, levels and mechanics details; nothing copied.
+18. **Mechanic:** the sucuk stands on one end and sways; hold to charge (sway slows), release to hop along its current lean; whichever END lands on a sticky surface sticks; a sucuk lying still stands up by itself (no softlock). Butter = slippery, jelly = bouncy (both never stick on landing), grill/knife = back to the last flag, falling into the soup = back to the last flag.
+19. **Soft body:** 7 circle segments joined by soft weld joints; standing is held by springs that pull each segment onto the lean line (stable but jiggly) instead of a single PD torque (that toppled).
+20. **Every level must be proven solvable** by the headless beam-search bot before shipping; par is set a little above the bot's jump count.
+21. **Ad points:** commercialBreak when starting a level from menus/next; rewarded x2 coins on the result screen; rewarded "skip level" in the pause menu after 5 falls. Skins are bought with coins only.
+22. **ay-kargo is frozen** until the owner says otherwise; shared code is copied into the new game, not refactored out of ay-kargo.

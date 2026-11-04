@@ -1,6 +1,6 @@
 ---
 name: game-qa
-description: Local game QA with Playwright for this repo's HTML5 games (ay-kargo = Canvas 2D + planck.js, istasyon = Canvas/DOM) — boot checks, gameplay invariants, deterministic runs (seeded RNG, controlled clock), visual-regression screenshots, console-error and frame-time checks. Use when writing or running game tests, verifying a change in the browser, or debugging a failing check. Everything runs locally; nothing is uploaded.
+description: Local game QA with Playwright for this repo's HTML5 games (ay-kargo and zip-sucuk = Canvas 2D + planck.js, istasyon = Canvas/DOM) — boot checks, gameplay invariants, deterministic runs (seeded RNG, controlled clock), visual-regression screenshots, console-error and frame-time checks. Use when writing or running game tests, verifying a change in the browser, or debugging a failing check. Everything runs locally; nothing is uploaded.
 license: MIT (adapted from OpusGameLabs/game-creator, see ATTRIBUTION.md)
 compatibility: Node.js + Playwright with a local Chromium. No game engine required.
 ---
@@ -57,6 +57,7 @@ A short JSON string an agent can reason about without reading pixels:
 ### Current state of the games
 
 - **ay-kargo** exposes `window.__game` (lowercase) in every build: `scene`, `sim` (the planck `Sim`), `save`, `startRun(makeLevel(w, i))`, `go(scene)`, `setTouch()`, `setScale()`, `frameTimes`, `workTimes`. It has no `render_game_to_text()` yet. When you next touch `main.ts`, migrate this to the contract above (`__GAME__`, gated to dev/test) and keep `__game` working until tests are updated.
+- **zip-sucuk** follows the contract: in dev/test builds it exposes `window.__GAME__` (`scene`, `sim`, `save`, `LEVELS`, `startLevel(i)`, `go`, `setPaused`) and `render_game_to_text()` (sucuk position/velocity, standing/lean/charging/power, jumps vs par, falls, coins, checkpoint, finish). Input is one button: hold Space/Up/W/mouse/touch, release to hop. Its physics (`src/game/world.ts`) is DOM-free; `Sim.update(dt, down)` can be driven headless, e.g. a beam-search bot that replays action sequences to prove every level is solvable.
 - **istasyon** is not in the repo yet. Apply the contract when it is added.
 
 ## Setting up the test suite in a game
