@@ -126,8 +126,7 @@ export function backdrop(ctx: CanvasRenderingContext2D, wi: number, camX: number
       const x = ((s.x - camX * par) % STAR_W + STAR_W) % STAR_W - 160; if (x < -6 || x > W + 6) continue;
       const tw = reducedMotion ? 1 : 0.65 + 0.35 * Math.sin(t * 1.3 + s.tw);
       ctx.globalAlpha = A.starAlpha * s.b * tw; const r = s.s * 0.5 + 0.4;
-      if (s.s > 2) { ctx.fillRect(x - r * 2, s.y + y0 - 0.6, r * 4, 1.2); ctx.fillRect(x - 0.6, s.y + y0 - r * 2, 1.2, r * 4); }
-      else ctx.fillRect(x - r, s.y + y0 - r, r * 2, r * 2);
+      ctx.fillRect(x - r, s.y + y0 - r, r * 2, r * 2);
     }
   }
   ctx.globalAlpha = 1;
@@ -140,10 +139,9 @@ export function backdrop(ctx: CanvasRenderingContext2D, wi: number, camX: number
     ctx.fillStyle = A.layers[l]; ctx.beginPath(); ctx.moveTo(0, bottom);
     for (let sx = 0; sx <= W + 16; sx += 16) ctx.lineTo(sx, L.base + yoff - layerY(sx + off, l, wi) * L.amp);
     ctx.lineTo(W, bottom); ctx.closePath(); ctx.fill();
-    // soft rim light along the top edge of each layer (stronger on nearer layers)
-    ctx.strokeStyle = al(A.layerRim, [0.25, 0.4, 0.55][l]); ctx.lineWidth = [2, 2.5, 3][l]; ctx.lineJoin = 'round';
-    ctx.beginPath(); for (let sx = 0; sx <= W + 16; sx += 16) { const y = L.base + yoff - layerY(sx + off, l, wi) * L.amp + 1.5; sx ? ctx.lineTo(sx, y) : ctx.moveTo(sx, y); } ctx.stroke();
-    if (l === 2) { // near layer: small rounded rocks sitting on it
+    if (l === 2) { // soft rim light along the near layer's edge (far layers stay flat: lower contrast with distance)
+      ctx.strokeStyle = al(A.layerRim, 0.55); ctx.lineWidth = 3; ctx.lineJoin = 'round';
+      ctx.beginPath(); for (let sx = 0; sx <= W + 16; sx += 32) { const y = L.base + yoff - layerY(sx + off, l, wi) * L.amp + 1.5; sx ? ctx.lineTo(sx, y) : ctx.moveTo(sx, y); } ctx.stroke(); // near layer: small rounded rocks sitting on it
       ctx.fillStyle = A.layers[1];
       for (let i = Math.floor(off / 90) - 1; i <= Math.ceil((off + W) / 90) + 1; i++) { if (hash(i * 3.3 + wi) > 0.45) continue; const sx = i * 90 + hash(i * 7.1) * 60 - off, r = 6 + hash(i * 1.7) * 12, y = L.base + yoff - layerY(sx + off, l, wi) * L.amp + r * 0.4;
         ctx.beginPath(); ctx.ellipse(sx, y, r * 1.3, r * 0.8, 0, Math.PI, 0); ctx.fill(); }
@@ -393,7 +391,10 @@ export function drawWorld(ctx: CanvasRenderingContext2D, sim: Sim, cam: Camera, 
   const cs = 3.4;
   for (let c = Math.floor(x0 / cs) - 1; c <= Math.ceil(x1 / cs); c++) {
     const hh = hash(c * 3.13 + sim.L.seed), wx = c * cs + hash(c * 7.7) * cs, depth = 0.7 + hash(c * 1.7) * 2.4, sx = X(wx), sy = Y(sim.groundY(wx) - depth), r = (0.16 + hash(c * 5.9) * 0.34) * S;
-    if (hh < 0.4) { const R = A.rock; shape(ctx, () => { ctx.beginPath(); for (let k = 0; k < 7; k++) { const an = k / 7 * Math.PI * 2, rr2 = r * (0.75 + 0.35 * hash(c + k * 11)); ctx.lineTo(sx + Math.cos(an) * rr2, sy + Math.sin(an) * rr2 * 0.72); } ctx.closePath(); }, { base: al(R.base, 0.55), dark: R.dark, light: R.light }, S * 0.6, { lw: 1.5, out: al(R.dark, 0.6) }); }
+    if (hh < 0.4) { const R = A.rock; // cheap per-frame version of the style: flat fill, highlight, outline (no clip)
+      ctx.beginPath(); for (let k = 0; k < 7; k++) { const an = k / 7 * Math.PI * 2, rr2 = r * (0.75 + 0.35 * hash(c + k * 11)); ctx.lineTo(sx + Math.cos(an) * rr2, sy + Math.sin(an) * rr2 * 0.72); } ctx.closePath();
+      ctx.fillStyle = G.spot; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = al(R.dark, 0.6); ctx.stroke();
+      ctx.fillStyle = al(R.light, 0.45); ctx.beginPath(); ctx.ellipse(sx - r * 0.25, sy - r * 0.3, r * 0.35, r * 0.14, -0.3, 0, 7); ctx.fill(); }
     else if (hh < 0.7) { const rx = r * 1.6, ry = r * 0.55;
       ctx.fillStyle = G.band; ctx.beginPath(); ctx.ellipse(sx, sy, rx, ry, 0, 0, 7); ctx.fill();
       ctx.fillStyle = al(G.line, 0.45); ctx.beginPath(); ctx.ellipse(sx, sy, rx, ry, 0, Math.PI, 0); ctx.ellipse(sx, sy - ry * 0.1, rx * 0.9, ry * 0.55, 0, 0, Math.PI, true); ctx.fill();
@@ -418,7 +419,8 @@ export function drawWorld(ctx: CanvasRenderingContext2D, sim: Sim, cam: Camera, 
   ctx.globalAlpha = 1;
   // small rocks in front of the edge
   for (let c = Math.floor(x0 / 2.2); c <= Math.ceil(x1 / 2.2); c++) { if (hash(c * 2.71 + 5) > 0.45) continue; const wx = c * 2.2 + hash(c * 9.3) * 1.5, r = (0.06 + hash(c * 4.1) * 0.09) * S, sx = X(wx), sy = Y(sim.groundY(wx));
-    shape(ctx, () => { ctx.beginPath(); ctx.ellipse(sx, sy - r * 0.3, r, r * 0.62, 0, 0, 7); }, A.rock, S * 0.5, { lw: 1.5 }); }
+    ctx.beginPath(); ctx.ellipse(sx, sy - r * 0.3, r, r * 0.62, 0, 0, 7); ctx.fillStyle = A.rock.base; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = A.rock.dark; ctx.stroke();
+    ctx.fillStyle = A.rock.light; ctx.beginPath(); ctx.ellipse(sx - r * 0.3, sy - r * 0.55, r * 0.4, r * 0.18, -0.2, 0, 7); ctx.fill(); }
   // ---- pickups ----
   const coin = sprite('coin3', [-0.32, -0.32, 0.32, 0.32], coinSprDraw);
   for (const p of sim.terrain.pickups) { if (p.taken || p.x < x0 || p.x > x1) continue; const sx = X(p.x), sy = Y(p.y) + Math.sin(t * 3 + p.x) * 4 * motion(1);
@@ -557,11 +559,10 @@ function drawEyes(ctx: CanvasRenderingContext2D, S: number, look: { x: number; y
     ctx.beginPath(); ctx.ellipse(x, y, r, Math.max(0.6, ry), 0, 0, 7); ctx.fill(); ctx.stroke();
     if (open < 0.2) continue;
     if (mood === 'happy') { ctx.strokeStyle = ART.roverDark.dark; ctx.lineWidth = Math.max(2, S * 0.025); ctx.beginPath(); ctx.arc(x, y + r * 0.35, r * 0.55, Math.PI * 1.15, Math.PI * 1.85); ctx.stroke(); continue; }
-    const pr = r * 0.48 * (open > 1 ? 0.85 : 1);
-    ctx.save(); ctx.beginPath(); ctx.ellipse(x, y, r, Math.max(0.6, ry), 0, 0, 7); ctx.clip();
-    ctx.fillStyle = ART.roverDark.dark; ctx.beginPath(); ctx.arc(x + look.x * r * 0.38, y + look.y * r * 0.3, pr, 0, 7); ctx.fill();
-    ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(x + look.x * r * 0.38 - pr * 0.35, y + look.y * r * 0.3 - pr * 0.35, pr * 0.32, 0, 7); ctx.fill();
-    ctx.restore();
+    // pupil stays inside the eye (offset + radius < r), so no clip is needed; squinting eyes show a flatter pupil
+    const pr = r * 0.48 * (open > 1 ? 0.85 : 1), py2 = Math.min(ry * 0.6, pr), px2 = x + look.x * r * 0.38, pyc = y + look.y * Math.max(0, ry - py2) * 0.6;
+    ctx.fillStyle = ART.roverDark.dark; ctx.beginPath(); ctx.ellipse(px2, pyc, pr, py2, 0, 0, 7); ctx.fill();
+    if (open >= 0.6) { ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(px2 - pr * 0.35, pyc - pr * 0.35, pr * 0.32, 0, 7); ctx.fill(); }
     if (open < 1) { ctx.strokeStyle = ROVER_OUT; ctx.lineWidth = Math.max(2, S * 0.022); ctx.beginPath(); ctx.moveTo(x - r * 1.1, y - ry); ctx.lineTo(x + r * 1.1, y - ry); ctx.stroke(); }
   }
 }
