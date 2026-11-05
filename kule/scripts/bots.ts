@@ -3,7 +3,7 @@
  * (build / upgrade / branch / sell / setTarget / callWave / ability), like a human would.
  */
 import { Sim, Tower, Enemy } from '../src/sim/sim';
-import { TOWERS, TOWER_KINDS, TowerKind, BranchId, ENEMIES, EnemyKind, BRANCHES, ABILITIES, LEVEL_GEN } from '../src/sim/config';
+import { TOWERS, TOWER_KINDS, TowerKind, BranchId, ENEMIES, EnemyKind, BRANCHES, ABILITIES, LEVEL_GEN, ARMOR_PER_LEVEL } from '../src/sim/config';
 import { rng } from '../src/sim/rng';
 import type { P } from '../src/sim/levels/types';
 
@@ -45,7 +45,7 @@ function teamDps(s: Sim) { let d = 0; for (const t of s.towers) d += s.dps(t as 
 export function potential(s: Sim, t: Fake, k: EnemyKind, team = 0): number {
   const st = s.stats4(t as Tower), E = ENEMIES[k], br = t.branch ? BRANCHES[t.branch] : null;
   if (E.air ? !st.air : !st.ground) return 0;
-  const raw = st.ignoreArmor ? st.dmg : Math.max(1, st.dmg - E.armor), dens = DENS[k];
+  const armor = Math.round(E.armor * (1 + ARMOR_PER_LEVEL * (s.g - 1))), raw = st.ignoreArmor ? st.dmg : Math.max(1, st.dmg - armor), dens = DENS[k];
   // overkill: a 55-damage band shot on a 30-HP bunny only counts 30
   const hp = Math.max(1, E.hp * s.hpMult(s.wave)), per = hp / Math.ceil(hp / raw);
   let dps = per * st.rate;

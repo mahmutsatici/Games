@@ -6,7 +6,7 @@
 import {
   DT, TOWERS, TowerKind, TargetMode, BranchId, BRANCHES, UPGRADE_COST, LEVEL_DMG_MULT, LEVEL_RANGE_ADD, L3_RATE_MULT, SELL_REFUND,
   ENEMIES, EnemyKind, CLAY_REGEN, CLAY_REGEN_DELAY, KING_DROPS, KING_DROP_COUNT, BOSS_SLOW_RESIST, BOSS_STOP_MULT, SCALE, WAVE_GAP, FIRST_WAVE_GAP,
-  ABILITIES, WORLD_TWIST, Perks, NO_PERKS, LOB_TIME, SLIME_SLOW_T, PIERCE_WIDTH, GRID, SPEED_JITTER,
+  ABILITIES, WORLD_TWIST, Perks, NO_PERKS, LOB_TIME, SLIME_SLOW_T, PIERCE_WIDTH, GRID, SPEED_JITTER, ARMOR_PER_LEVEL,
 } from './config';
 import type { LevelDef, P } from './levels/types';
 import { rng } from './rng';
@@ -188,7 +188,8 @@ export class Sim {
   /** seconds until the last enemy of a wave has spawned */
   waveDuration(w: { groups: { n: number; gap: number; delay: number }[] }) { let m = 0; for (const g of w.groups) m = Math.max(m, g.delay + (g.n - 1) * g.gap); return m; }
   /** HP multiplier for wave index i (0-based) */
-  hpMult(i: number) {
+  hpMult(i: number) { return this.hpMultRaw(i) * (this.L.hp ?? 1); }
+  private hpMultRaw(i: number) {
     if (this.endless) { const lap = Math.floor(i / this.L.waves.length); return (1 + SCALE.hpPerWave * (i % this.L.waves.length)) * Math.pow(SCALE.hpPerLevel, this.g - 1) * Math.pow(1 + SCALE.endlessHpPerWave * this.L.waves.length, lap); }
     return (1 + SCALE.hpPerWave * i) * Math.pow(SCALE.hpPerLevel, this.g - 1);
   }
@@ -197,8 +198,8 @@ export class Sim {
     let e = this.enemies.find(q => !q.alive);
     if (!e) { e = {} as Enemy; this.enemies.push(e); }
     // bosses scale with the level only (they always come on the last wave)
-    const hp = B.boss ? B.hp * Math.pow(SCALE.hpPerLevel, this.g - 1) : B.hp * this.hpMult(wave);
-    Object.assign(e, { id: this.nextId++, alive: true, kind, air: B.air, boss: !!B.boss, size: B.size, hp, maxHp: hp, armor: B.armor,
+    const hp = B.boss ? B.hp * Math.pow(SCALE.hpPerLevel, this.g - 1) * (this.L.hp ?? 1) : B.hp * this.hpMult(wave);
+    Object.assign(e, { id: this.nextId++, alive: true, kind, air: B.air, boss: !!B.boss, size: B.size, hp, maxHp: hp, armor: Math.round(B.armor * (1 + ARMOR_PER_LEVEL * (this.g - 1))),
       speed: B.speed * (this.L.world === 3 ? WORLD_TWIST.sandSpeed : 1) * (1 + (this.r() - 0.5) * SPEED_JITTER), bounty: Math.max(1, Math.round(B.bounty * Math.pow(SCALE.bountyPerLevel, this.g - 1))), lives: B.lives,
       path, d, x: 0, y: 0, a: 0, slow: 0, slowT: 0, stopT: 0, dotDps: 0, dotT: 0, lastHit: -9, drops: 0, wave, hitT: -9, bornT: this.time });
     pathAt(e.air ? this.airPaths[path] : this.paths[path], d, this.tmp); e.x = this.tmp.x; e.y = this.tmp.y; e.a = this.tmp.a;
