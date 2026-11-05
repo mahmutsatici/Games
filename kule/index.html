@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Toy Fort</title>
+<style>
+  :root{--sat:env(safe-area-inset-top,0px);--sal:env(safe-area-inset-left,0px);--sar:env(safe-area-inset-right,0px);--sab:env(safe-area-inset-bottom,0px)}
+  html,body{margin:0;height:100%;background:#2a2238;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+  #wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+  canvas{display:block;touch-action:none;outline:none;width:min(100vw,177.78vh);height:min(56.25vw,100vh)}
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="c" width="1280" height="720" tabindex="0"></canvas></div>
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>

@@ -8,6 +8,7 @@ Monorepo of original, text-free HTML5 web games for web game portals. Read this 
 |---|---|
 | `ay-kargo/` | Moon Cargo: physics driving game (Vite + TypeScript, Canvas 2D, planck.js). See `ay-kargo/README.md`, `ay-kargo/features.md`. |
 | `zip-sucuk/` | Sucuk Hop: one-button soft-body physics game (Vite + TypeScript, Canvas 2D, planck.js). Tunables in `zip-sucuk/src/config.ts`, levels in `src/game/levels.ts`. See `zip-sucuk/features.md`. |
+| `kule/` | Toy Fort (working title "Oyuncak Kalesi"): toy-diorama tower defense (Vite + TypeScript, Canvas 2D, no engine). Deterministic sim in `kule/src/sim/` (no DOM, 30 ticks/s, seeded RNG), tunables in `kule/src/sim/config.ts`, balance harness `npm run balance` → `kule/BALANCE.md`. |
 | `istasyon/` | Planned game (Canvas/DOM). Not in the repo yet; follow the same structure when it is added. |
 | `ay-kargo/src/platform/` | Platform layer: `types.ts` (the only interface the game uses) + one adapter per portal. |
 | `ay-kargo/reference/` | Approved prototype (`prototype.html`): the feel baseline for physics. |
