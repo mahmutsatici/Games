@@ -59,6 +59,15 @@ Status is based on reading the code (2026-11-04) and on browser/headless checks 
 - [x] verified: Unthrottled 60 fps, ~1 ms JS per frame (headless Chromium)
 - [ ] not verified: "No frame over 33 ms at 4x CPU throttling": measured 38–45 fps in headless software rendering; needs a real mid-range phone
 
+## UI and art redesign (`src/art/`, `src/ui/`, `src/game/render.ts`, `src/main.ts`)
+
+- [x] verified: Soft cartoon diorama style: per-world palettes, outlined actors, calm parallax backgrounds (Moon, Mars, Ice moon)
+- [x] verified: Bundled fonts (Fredoka, Nunito), SVG icon set (no emoji), hardware panels and physical buttons with press state and sounds
+- [x] verified: Loading crate, title diorama, route map with world pages, settings, briefing, garage lift with visible upgrades, pause, delivery complete/failed, battery offer, daily reward, iris transitions
+- [x] verified: Rover headlight eyes (look, blink, squint, wide, dizzy), crate rattle, slime googly eyes and splats, UFO pilot and beam, meteor streak, landing pad celebration
+- [x] verified: HUD pieces and touch pedals respect safe-area insets; no overlaps at 640x360 and 1280x720
+- [ ] not verified: Safe areas on a notched phone; 60 fps at 4x CPU throttle on a real phone
+
 ## Known follow-ups
 
 - Move tunable numbers into `src/config.ts` (convention in CLAUDE.md).

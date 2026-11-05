@@ -48,3 +48,11 @@ Decisions already made for this repo. Add new ones at the end with a date and a 
 27. **20 levels in 4 worlds of 5**, grouped by place: Kitchen (counter), Pantry (shelves), Hot Stove, Freezer. `LEVELS` is built from `ORDER` (ids in play order); ids never change, so saved stars stay with their level. Menus show the position (1–20), not the id.
 28. **Unlocking follows play order:** a level is open if the level before it in `ORDER` has stars, or it has stars itself (keeps old saves working after the reorder).
 29. **The solver bot sets par:** par = the bot's jump count + 1–2. Tall sticky walls next to a jump target trap the sausage, so climbs reuse proven spacings (about 2.8 m up, 1–2 m sideways).
+
+### Moon Cargo UI and art redesign (2026-11-05)
+
+30. **ay-kargo is unfrozen** for the redesign the owner asked for. The redesign is render-only: `world.ts`, `levels.ts` and `save.ts` (physics, terrain generation, hazard logic, economy, tuning) are unchanged.
+31. **Art direction: soft cartoon space diorama.** Calm, desaturated backgrounds; the rover, crates, slimes, coins, meteors and UFO are saturated and outlined in a darker shade of their own colour (never black). Flat base, one shadow shape, one highlight. Palettes per world live in `ay-kargo/src/art/palette.ts`; the old `WORLDS` colours in `levels.ts` are no longer used for drawing.
+32. **Fonts:** Fredoka Bold (display, numbers) and Nunito ExtraBold (small text), both OFL from Google Fonts, instanced and subset to Latin + Cyrillic woff2 (16 KB + 37 KB) and bundled in `ay-kargo/src/ui/fonts/`. Japanese falls back to the system font.
+33. **UI = rover/station hardware** (`ay-kargo/src/ui/widgets.ts`): riveted metal panels, cargo-crate panels, physical buttons with a darker bottom edge that press down 3 px with a click. Rewarded buttons are blue with a drawn film-clapper icon; the normal continue/finish button next to them is green and at least as large (Poki).
+34. **Upgrades show on the rover** where the collider allows it: bumper size, turbo nozzle, battery cells, exhaust stack (engine), roof shield emitter, spring thickness (suspension), tread depth (tires) and real bed-post height (bed). The tires are not drawn bigger, because the wheel collider radius doesn't change with the upgrade.

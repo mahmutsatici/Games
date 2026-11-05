@@ -295,6 +295,16 @@ const DICT = {
     ru: 'Рекорд',
     ja: 'ベスト',
   },
+  settings: {
+    en: 'Settings',
+    de: 'Einstellungen',
+    fr: 'Réglages',
+    es: 'Ajustes',
+    pt: 'Configurações',
+    tr: 'Ayarlar',
+    ru: 'Настройки',
+    ja: '設定',
+  },
   sound: {
     en: 'Sound',
     de: 'Ton',
