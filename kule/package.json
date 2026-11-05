@@ -6,11 +6,15 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p scripts",
     "build:portals": "node scripts/build-portals.mjs",
-    "balance": "esbuild scripts/balance.ts --bundle --platform=node --format=esm --outfile=dist-test/balance.mjs --log-level=error && node dist-test/balance.mjs"
+    "balance": "esbuild scripts/balance.ts --bundle --platform=node --format=esm --outfile=dist-test/balance.mjs --log-level=error && node dist-test/balance.mjs",
+    "gen": "esbuild scripts/gen-levels.ts --bundle --platform=node --format=esm --outfile=dist-test/gen.mjs --log-level=error && node dist-test/gen.mjs",
+    "trace": "esbuild scripts/trace.ts --bundle --platform=node --format=esm --outfile=dist-test/trace.mjs --log-level=error && node dist-test/trace.mjs",
+    "calibrate": "esbuild scripts/calibrate.ts --bundle --platform=node --format=esm --outfile=dist-test/calibrate.mjs --log-level=error && node dist-test/calibrate.mjs"
   },
   "devDependencies": {
+    "@types/node": "^22.9.0",
     "typescript": "5.6.3",
     "vite": "5.4.11"
   }
