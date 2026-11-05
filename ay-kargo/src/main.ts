@@ -178,7 +178,7 @@ function drawMap(dt: number) {
     if (ok) stars3(x, y + 60, st, 20);
     buttons.push({ x: x - 46, y: y - 46, w: 92, h: 92, cb: () => { if (ok) { sel = makeLevel(wi, i); selShield = false; go('pre'); } else flashMsg(); } });
   }
-  const cn = mapNode(cur); drawRoverPreview(ctx, cn.x, cn.y - 92, 30, sceneT, 3);
+  const cn = mapNode(cur); drawRoverPreview(ctx, cn.x, cn.y - 92, 30, sceneT, { crates: 3 });
   if (endlessUnlocked()) button(ctx, W - 250, 612, 220, 90, 'amber', () => { sel = makeLevel(wi, 9, true, (Math.random() * 1e6) | 0); selShield = false; go('pre'); }, (cx, cy) => { icon(ctx, 'inf', cx - 50, cy, 54); text(ctx, (save.endlessBest || 0) + 'm', cx + 34, cy, 28); });
   if (!dailyShown && avail && sceneT > 0.4) { dailyShown = true; go('daily'); }
 }
@@ -209,7 +209,7 @@ function drawGarage(dt: number) {
   panel(ctx, 24, 104, 452, 592);
   const sg = ctx.createRadialGradient(250, 330, 10, 250, 330, 230); sg.addColorStop(0, 'rgba(255,220,170,.28)'); sg.addColorStop(1, 'rgba(255,220,170,0)'); ctx.fillStyle = sg; ctx.fillRect(30, 110, 440, 440);
   ctx.fillStyle = '#2a3150'; ctx.beginPath(); ctx.ellipse(250, 446, 200, 34, 0, 0, 7); ctx.fill(); ctx.strokeStyle = '#ff8a3d'; ctx.lineWidth = 3; ctx.stroke();
-  drawRoverPreview(ctx, 250, 368, 118, sceneT, 3);
+  drawRoverPreview(ctx, 250, 368, 118, sceneT, { crates: 3 });
   const u = save.up, bars: [Icon, number][] = [['speed', u.engine / 8], ['tires', u.tires / 8], ['suspension', u.suspension / 8], ['battery', u.battery / 8]];
   bars.forEach(([ic, v], k) => { const y = 520 + k * 42; icon(ctx, ic, 74, y, 32); rr(ctx, 104, y - 10, 330, 20, 10); ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.fill(); rr(ctx, 104, y - 10, 330 * (0.12 + 0.88 * v), 20, 10); ctx.fillStyle = '#ff8a3d'; ctx.fill(); });
   // upgrade rows (2 columns x 4)
