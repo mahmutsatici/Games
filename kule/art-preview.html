@@ -1,0 +1,19 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Toy Fort art preview</title>
+<style>body{margin:0;background:#d6a96f}</style></head>
+<body><canvas id="c" width="1400" height="640"></canvas>
+<script type="module">
+import { soldier } from '/src/art/towers.ts';
+import { bunny } from '/src/art/enemies.ts';
+const c = document.getElementById('c').getContext('2d');
+for (let i = 0; i < 20; i++) { c.fillStyle = i % 2 ? '#cfa267' : '#d9ad74'; c.fillRect(0, i * 32, 1400, 32); }
+const load = s => new Promise(r => { const im = new Image(); im.onload = () => r(im); im.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(s); });
+const items = [soldier(1, null), soldier(2, null), soldier(3, null), soldier(4, 'drumSquad'), soldier(4, 'dartGun'), bunny(0), bunny(1)];
+let x = 30;
+for (const [i, s] of items.entries()) { const im = await load(s); const w = im.width * 1.8, h = im.height * 1.8; c.drawImage(im, x, 330 - h * (i >= 5 ? 0.84 : 0.88), w, h); x += w + 8; }
+// game scale on an 80 px grid with a tape path
+c.fillStyle = '#efe3c6'; c.fillRect(0, 520, 1400, 56); c.fillStyle = '#cdbd98'; c.fillRect(0, 572, 1400, 6);
+c.strokeStyle = 'rgba(0,0,0,.06)'; for (let gx = 0; gx < 1400; gx += 80) { c.beginPath(); c.moveTo(gx, 360); c.lineTo(gx, 640); c.stroke(); }
+x = 80; for (const s of [soldier(1, null), soldier(3, null), soldier(4, 'drumSquad')]) { const im = await load(s); c.drawImage(im, x - 60, 480 - 132, im.width, im.height); x += 160; }
+x = 600; for (let k = 0; k < 5; k++) { const im = await load(bunny(k % 2)); c.drawImage(im, x - 40, 548 - 64 + (k % 2 ? 0 : 0), im.width * 0.75, im.height * 0.75); x += 70; }
+document.title = 'done';
+</script></body></html>

@@ -6,6 +6,7 @@ on:
     paths:
       - 'ay-kargo/**'
       - 'zip-sucuk/**'
+      - 'kule/**'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
@@ -30,12 +31,14 @@ jobs:
           cache-dependency-path: |
             ay-kargo/package-lock.json
             zip-sucuk/package-lock.json
+            kule/package-lock.json
       # ay-kargo stays at the site root (existing link), each other game gets its own sub-folder
       - name: Build
         run: |
           (cd ay-kargo && npm ci && VITE_PORTAL=none npm run build)
           (cd zip-sucuk && npm ci && VITE_PORTAL=none npm run build)
-          mkdir -p site && cp -r ay-kargo/dist/. site/ && mkdir -p site/zip-sucuk && cp -r zip-sucuk/dist/. site/zip-sucuk/
+          (cd kule && npm ci && VITE_PORTAL=none npm run build)
+          mkdir -p site && cp -r ay-kargo/dist/. site/ && mkdir -p site/zip-sucuk && cp -r zip-sucuk/dist/. site/zip-sucuk/ && mkdir -p site/kule && cp -r kule/dist/. site/kule/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
