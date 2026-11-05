@@ -35,3 +35,10 @@ Decisions already made for this repo. Add new ones at the end with a date and a 
 20. **Every level must be proven solvable** by the headless beam-search bot before shipping; par is set a little above the bot's jump count.
 21. **Ad points:** commercialBreak when starting a level from menus/next; rewarded x2 coins on the result screen; rewarded "skip level" in the pause menu after 5 falls. Skins are bought with coins only.
 22. **ay-kargo is frozen** until the owner says otherwise; shared code is copied into the new game, not refactored out of ay-kargo.
+
+### Sucuk Hop UI redesign (2026-11-05)
+
+23. **Fonts:** Erica One (titles) and Outfit (small text and all numbers, since Erica One digits blur at small sizes), both OFL, bundled under `zip-sucuk/src/ui/fonts/`; no web-font CDN.
+24. **One style system** in `zip-sucuk/src/ui/theme.ts` (colour triples, radii, easing, reduced motion) and `widgets.ts` (candy buttons, board panels, ribbons, chips, toggles, iris, UI particles). Outline = darker shade of the object's own colour, never black. Rewarded buttons are purple with a clapper icon; continue/next is green and at least as large.
+25. **No fail screen:** the game has no fail state, so a fall shows a short comic reaction instead of a "level failed" panel.
+26. **Redesign is render-only:** `world.ts`, `levels.ts` and `config.ts` are unchanged; level solver results are identical before and after.

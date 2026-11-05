@@ -5,11 +5,11 @@ export interface SaveData {
   v: 1; coins: number;
   stars: Record<number, number>;   // level id -> 1..3
   best: Record<number, number>;    // level id -> fewest jumps
-  skin: string; owned: string[]; muted: boolean;
+  skin: string; owned: string[]; muted: boolean; music: boolean;
 }
 const KEY = 'zipsucuk.save.v1';
 let plat: Platform;
-const fresh = (): SaveData => ({ v: 1, coins: 0, stars: {}, best: {}, skin: 'sucuk', owned: ['sucuk'], muted: false });
+const fresh = (): SaveData => ({ v: 1, coins: 0, stars: {}, best: {}, skin: 'sucuk', owned: ['sucuk'], muted: false, music: true });
 export let save: SaveData = fresh();
 
 export function loadSave(p: Platform) {

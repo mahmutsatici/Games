@@ -223,6 +223,17 @@ function run(fn: (t: number) => void): void {
 }
 
 export const sfx = {
+  /** UI: candy button pushed down (soft rubbery tock) and released (bright click) */
+  press(): void { run((t) => { tone('sine', 520, 300, t, 0.06, 0.18); burst(t, 0.03, 0.06, 'lowpass', 1600, 600, 1, 0.002); }); },
+  release(): void { run((t) => { tone('triangle', 880, 1320, t, 0.06, 0.12); tone('sine', 1320, 1760, t + 0.03, 0.05, 0.06); }); },
+  /** UI: screen transition */
+  whoosh(): void { run((t) => { burst(t, 0.26, 0.12, 'bandpass', 500, 2600, 1.2, 0.04); }); },
+  /** UI: something pops in (panel, star slot) */
+  pop(): void { run((t) => { tone('sine', 300, 900, t, 0.09, 0.2); }); },
+  /** UI: coin counter rolling up */
+  tick(): void { run((t) => { tone('square', 1800, 1800, t, 0.025, 0.035); }); },
+  /** UI: purchase / unlock */
+  ding(): void { run((t) => { [784, 1047, 1568].forEach((f, i) => tone('triangle', f, f, t + i * 0.06, 0.22, 0.12)); }); },
   jump(power01: number): void {
     run((t) => {
       const p = Math.min(1, Math.max(0, power01));
