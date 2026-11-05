@@ -2,9 +2,9 @@
 import { Sim } from '../src/sim/sim';
 import { LEVELS } from '../src/sim/levels/data';
 import { NO_PERKS, TowerKind } from '../src/sim/config';
-import { naiveBot, greedyBot, smartBot } from './bots';
+import { naiveBot, greedyBot, smartBot, lookaheadBot } from './bots';
 const lvl = +(process.argv[2] ?? 1), name = process.argv[3] ?? 'smart';
-const bot = name === 'naive' ? naiveBot(1) : name === 'greedy' ? greedyBot(1) : name === 'smart' ? smartBot() : smartBot(name.slice(5) as TowerKind);
+const bot = name === 'naive' ? naiveBot(1) : name === 'greedy' ? greedyBot(1) : name === 'smart' ? lookaheadBot() : smartBot(name.slice(5) as TowerKind);
 const L = LEVELS[lvl - 1], s = new Sim(L, { seed: 1, perks: NO_PERKS, events: true });
 let w = 0, lives = s.lives;
 while (s.state === 'run' && s.tick < 30 * 2400) {

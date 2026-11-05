@@ -128,3 +128,41 @@ export function smartBot(only?: TowerKind): Bot {
     }
   } };
 }
+
+// ---------------------------------------------------------------- smart with lookahead (copies the sim, tries the best options)
+interface Opt { key: string; v: number; cost: number; apply: (s: Sim) => boolean; }
+/** heuristic ranking of every build / upgrade / branch; apply() works on any copy (pads and towers by index / id) */
+export function rankOptions(s: Sim, only?: TowerKind): Opt[] {
+  const th = threats(s, 3); if (!th.length) return [];
+  const team = teamDps(s), have = new Map<EnemyKind, number>(); for (const q of th) { let p = 0; for (const t of s.towers) p += potential(s, t, q.k, team); have.set(q.k, p); }
+  const value = (t: Fake, base?: Fake) => { let v = 0; for (const q of th) { const add = potential(s, t, q.k, team) - (base ? potential(s, base, q.k, team) : 0), def = Math.max(0, q.hp * 1.6 - have.get(q.k)!); v += q.n * (Math.min(add, def) + 0.12 * add) / q.hp * ENEMIES[q.k].lives; } return v; };
+  const out: Opt[] = [];
+  for (const pad of emptyPads(s)) { const [x, y] = padXY(s, pad); for (const k of only ? [only] : TOWER_KINDS) { const c = TOWERS[k].cost; out.push({ key: `b${pad}${k}`, v: value({ kind: k, level: 1, branch: null, x, y }) / c, cost: c, apply: q => !!q.build(pad, k) }); } }
+  for (const t of s.towers) { if (t.level >= 4) continue; const c = s.upgradeCost(t), id = t.id, find = (q: Sim) => q.towers.find(x => x.id === id);
+    if (t.level < 3) out.push({ key: `u${id}`, v: value({ ...t, level: (t.level + 1) as 2 | 3 }, t) / c, cost: c, apply: q => { const x = find(q); return !!x && q.upgrade(x); } });
+    else for (const b of TOWERS[t.kind].branches) out.push({ key: `r${id}${b}`, v: value({ ...t, level: 4, branch: b }, t) / c, cost: c, apply: q => { const x = find(q); return !!x && q.branch(x, b); } }); }
+  return out.sort((a, b) => b.v - a.v);
+}
+/** play a copy forward (abilities by the same rule) and score it */
+function rollout(s: Sim, ticks: number) {
+  const c = s.clone();
+  for (let i = 0; i < ticks && c.state === 'run'; i++) { if (i % 30 === 0) useAbilities(c); c.step(); }
+  const d = c.stats.dmg; return (c.state === 'lost' ? -5000 : 0) + c.lives * 400 + (d.soldier + d.catapult + d.bubble + d.band + d.hangar + d.ability) * 0.6 + c.gold * 0.25;
+}
+export function lookaheadBot(only?: TowerKind, width = 3): Bot {
+  let nextEval = 0;
+  return { name: only ? `only-${only}` : 'smart', decide(s) {
+    useAbilities(s);
+    if (s.tick < nextEval) return;
+    const opts = rankOptions(s, only).filter(o => o.cost <= s.gold);
+    if (!opts.length) { nextEval = s.tick + 30; return; }
+    // candidates: the best few overall + the best of each tower family (diversity), plus waiting
+    const cand: Opt[] = []; for (const o of opts) { if (cand.length >= width) break; cand.push(o); }
+    for (const k of only ? [] : TOWER_KINDS) { const o = opts.find(x => x.key.endsWith(k) || (x.key[0] !== 'b' && s.towers.find(t => x.key.includes(String(t.id)))?.kind === k)); if (o && !cand.includes(o)) cand.push(o); }
+    const next = s.L.waves[s.wave % Math.max(1, s.L.waves.length)], horizon = Math.min(900, Math.max(450, Math.round((Math.max(0, s.countdown) + (next ? s.waveDuration(next) : 0) + 14) * 30)));
+    let best: Opt | null = null, bv = rollout(s, horizon);
+    for (const o of cand) { const c = s.clone(); if (!o.apply(c)) continue; const v = rolloutFrom(c, horizon); if (v > bv) { bv = v; best = o; } }
+    if (best) { best.apply(s); nextEval = s.tick + 15; } else nextEval = s.tick + 90;
+  } };
+}
+function rolloutFrom(c: Sim, ticks: number) { return rollout(c, ticks); }

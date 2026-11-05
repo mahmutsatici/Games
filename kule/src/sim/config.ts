@@ -28,7 +28,7 @@ export const TOWERS: Record<TowerKind, TowerBase> = {
   soldier: { cost: 100, dmg: 8, rate: 1.25, range: 2.5, ground: true, air: true, shot: 9, defaultTarget: 'first', branches: ['drumSquad', 'dartGun'] },
   catapult: { cost: 150, dmg: 14, rate: 0.5, range: 2.8, ground: true, air: false, shot: 0, splash: 0.9, splashFrac: 0.5, defaultTarget: 'first', branches: ['crane', 'slimeBlocks'] },
   bubble: { cost: 110, dmg: 3, rate: 1.6, range: 2.5, ground: true, air: true, shot: 6, slow: 0.45, slowT: 2.0, slowRadius: 0.6, defaultTarget: 'first', branches: ['giantBubble', 'foamMachine'] },
-  band: { cost: 200, dmg: 55, rate: 0.4, range: 4.5, ground: true, air: true, shot: 18, ignoreArmor: true, defaultTarget: 'strong', branches: ['slingAce', 'tripleBand'] },
+  band: { cost: 200, dmg: 55, rate: 0.4, range: 3.5, ground: true, air: true, shot: 18, ignoreArmor: true, defaultTarget: 'strong', branches: ['slingAce', 'tripleBand'] },
   hangar: { cost: 140, dmg: 11, rate: 1.0, range: 3.0, ground: false, air: true, shot: 8, chain: 1, chainFrac: 0.7, defaultTarget: 'first', branches: ['origami', 'deskFan'] },
 };
 /** catapult lob flight time (s): the block lands where the target will be */
@@ -42,7 +42,7 @@ export const L3_RATE_MULT = 1.15;           // level 3 and 4
 export const SELL_REFUND = 0.7;
 
 export const BRANCHES: Record<BranchId, Partial<{ rateMult: number; dmgMult: number; rangeAdd: number; splashAdd: number; slowOnSplash: number; slowSet: number; pierce: number; dotDps: number; dotT: number; trapEvery: number; trapT: number; multi: number; multiFrac: number; chain: number; coneDeg: number; groundFrac: number }>> = {
-  drumSquad: { rateMult: 2, dotDps: 2, dotT: 3 },
+  drumSquad: { rateMult: 1.6, dotDps: 2, dotT: 3 },
   dartGun: { pierce: 3 },
   crane: { rangeAdd: 1.5, splashAdd: 0.4 },
   slimeBlocks: { slowOnSplash: 0.2 },

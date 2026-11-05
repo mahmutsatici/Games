@@ -9,7 +9,6 @@ import {
   ABILITIES, WORLD_TWIST, Perks, NO_PERKS, LOB_TIME, SLIME_SLOW_T, PIERCE_WIDTH, GRID, SPEED_JITTER, ARMOR_PER_LEVEL,
 } from './config';
 import type { LevelDef, P } from './levels/types';
-import { rng } from './rng';
 
 // ---------------------------------------------------------------- paths
 export interface Path { pts: P[]; cum: number[]; len: number; }
@@ -67,7 +66,9 @@ export class Sim {
   /** stats for the balance harness */
   stats = { spent: { soldier: 0, catapult: 0, bubble: 0, band: 0, hangar: 0 } as Record<TowerKind, number>, branches: [] as BranchId[], waveLives: [] as number[], leaked: 0, kills: 0, abilities: 0, dmg: { soldier: 0, catapult: 0, bubble: 0, band: 0, hangar: 0, ability: 0 } as Record<TowerKind | 'ability', number> };
   readonly endless: boolean;
-  private r: () => number; private nextId = 1;
+  /** mulberry32 state kept on the sim (not in a closure) so clone() copies it */
+  private rs = 1; private nextId = 1;
+  private r() { this.rs = (this.rs + 0x6d2b79f5) >>> 0; let t = this.rs; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }
   private spawnQ: { tick: number; kind: EnemyKind; path: number; wave: number }[] = [];
   private waveLeft: number[] = []; private waveLivesStart: number[] = [];
   private grid: Enemy[][]; private gw = GRID.cols + 6; private gh = GRID.rows + 6;
@@ -77,7 +78,7 @@ export class Sim {
   readonly econ: number;
 
   constructor(L: LevelDef, o: SimOptions = {}) {
-    this.L = L; this.perks = o.perks ?? NO_PERKS; this.r = rng(o.seed ?? 1); this.recordEvents = o.events ?? true; this.endless = !!o.endless;
+    this.L = L; this.perks = o.perks ?? NO_PERKS; this.rs = (o.seed ?? 1) >>> 0; this.recordEvents = o.events ?? true; this.endless = !!o.endless;
     this.g = Math.max(1, L.g || SCALE.endlessG);
     this.paths = L.map.paths.map(mkPath);
     this.airPaths = L.map.paths.map((p, i) => mkPath(L.map.air?.[i] ?? [p[0], p[p.length - 1]]));
@@ -91,6 +92,20 @@ export class Sim {
   get goal(): P { const p = this.L.map.paths[0]; return p[p.length - 1]; }
   private emit(e: SimEvent) { if (this.recordEvents) this.events.push(e); }
   drainEvents() { const e = this.events; this.events = []; return e; }
+
+  /** deep copy for lookahead (bots): same future given the same actions; events are not recorded in the copy */
+  clone(): Sim {
+    const c = Object.create(Sim.prototype) as Sim; Object.assign(c, this);
+    const tm = new Map<Tower, Tower>(), em = new Map<Enemy, Enemy>();
+    c.towers = this.towers.map(t => { const n = { ...t }; tm.set(t, n); return n; });
+    c.pads = this.pads.map(t => t ? tm.get(t)! : null);
+    c.enemies = this.enemies.map(e => { const n = { ...e }; em.set(e, n); return n; });
+    c.proj = this.proj.map(p => ({ ...p, tower: tm.get(p.tower) ?? p.tower, target: p.target ? em.get(p.target) ?? null : null }));
+    c.events = []; c.recordEvents = false; c.stats = JSON.parse(JSON.stringify(this.stats));
+    c.spawnQ = this.spawnQ.map(q => ({ ...q })); c.waveLeft = [...this.waveLeft]; c.waveLivesStart = [...this.waveLivesStart];
+    c.grid = Array.from({ length: this.gw * this.gh }, () => []); c.tmp = { x: 0, y: 0, a: 0 };
+    return c;
+  }
 
   // ============================================================ player API
   towerCost(kind: TowerKind) { return TOWERS[kind].cost; }

@@ -10,13 +10,13 @@ import { Sim } from '../src/sim/sim';
 import { LEVELS } from '../src/sim/levels/data';
 import { NO_PERKS, ALL_PERKS, TOWER_KINDS, TowerKind, BranchId, TOWERS, Perks, ENEMIES, EnemyKind, TICK_HZ } from '../src/sim/config';
 import type { LevelDef } from '../src/sim/levels/types';
-import { naiveBot, greedyBot, smartBot, Bot } from './bots';
+import { naiveBot, greedyBot, smartBot, lookaheadBot, Bot } from './bots';
 
 interface Job { lvl: number; bot: string; perks: boolean; seed: number; }
 interface Res extends Job { won: boolean; lives: number; spent: Record<TowerKind, number>; branches: BranchId[]; worstWave: number; worstIdx: number; abilities: number; secs: number; }
 
 const BOTS = ['naive', 'greedy', 'smart', ...TOWER_KINDS.map(k => `only-${k}`)];
-function makeBot(name: string, seed: number): Bot { if (name === 'naive') return naiveBot(seed); if (name === 'greedy') return greedyBot(seed); if (name === 'smart') return smartBot(); return smartBot(name.slice(5) as TowerKind); }
+function makeBot(name: string, seed: number): Bot { if (name === 'naive') return naiveBot(seed); if (name === 'greedy') return greedyBot(seed); if (name === 'smart') return lookaheadBot(); return smartBot(name.slice(5) as TowerKind); }
 
 export function run(j: Job): Res {
   const L = LEVELS[j.lvl - 1], perks = j.perks ? ALL_PERKS() : NO_PERKS;
