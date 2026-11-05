@@ -42,3 +42,13 @@ Decisions already made for this repo. Add new ones at the end with a date and a 
 24. **One style system** in `zip-sucuk/src/ui/theme.ts` (colour triples, radii, easing, reduced motion) and `widgets.ts` (candy buttons, board panels, ribbons, chips, toggles, iris, UI particles). Outline = darker shade of the object's own colour, never black. Rewarded buttons are purple with a clapper icon; continue/next is green and at least as large.
 25. **No fail screen:** the game has no fail state, so a fall shows a short comic reaction instead of a "level failed" panel.
 26. **Redesign is render-only:** `world.ts`, `levels.ts` and `config.ts` are unchanged; level solver results are identical before and after.
+
+### Moon Cargo UI and art redesign (2026-11-05)
+
+(Numbered from 30 so they don't clash with 27–29 from the open zip-sucuk levels PR.)
+
+30. **ay-kargo is unfrozen** for the redesign the owner asked for. The redesign is render-only: `world.ts`, `levels.ts` and `save.ts` (physics, terrain generation, hazard logic, economy, tuning) are unchanged.
+31. **Art direction: soft cartoon space diorama.** Calm, desaturated backgrounds; the rover, crates, slimes, coins, meteors and UFO are saturated and outlined in a darker shade of their own colour (never black). Flat base, one shadow shape, one highlight. Palettes per world live in `ay-kargo/src/art/palette.ts`; the old `WORLDS` colours in `levels.ts` are no longer used for drawing.
+32. **Fonts:** Fredoka Bold (display, numbers) and Nunito ExtraBold (small text), both OFL from Google Fonts, instanced and subset to Latin + Cyrillic woff2 (16 KB + 37 KB) and bundled in `ay-kargo/src/ui/fonts/`. Japanese falls back to the system font.
+33. **UI = rover/station hardware** (`ay-kargo/src/ui/widgets.ts`): riveted metal panels, cargo-crate panels, physical buttons with a darker bottom edge that press down 3 px with a click. Rewarded buttons are blue with a drawn film-clapper icon; the normal continue/finish button next to them is green and at least as large (Poki).
+34. **Upgrades show on the rover** where the collider allows it: bumper size, turbo nozzle, battery cells, exhaust stack (engine), roof shield emitter, spring thickness (suspension), tread depth (tires) and real bed-post height (bed). The tires are not drawn bigger, because the wheel collider radius doesn't change with the upgrade.

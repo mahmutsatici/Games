@@ -49,4 +49,143 @@ Captured with `audit.cjs` (Playwright, Chromium): loading, title, daily reward, 
 
 ## 3. Before / after
 
-Filled in after the redesign.
+Same file names in `docs/ui-review/before/` and `docs/ui-review/after/` for all four viewports. Desktop pairs below.
+
+### Loading
+
+Was nothing: the title just appeared. Now the starfield with a crate that fills up from the bottom as the bundled fonts load.
+
+| Before | After |
+|---|---|
+| ![before](docs/ui-review/before/desktop-00-loading.jpg) | ![after](docs/ui-review/after/desktop-00-loading.jpg) |
+
+### Title
+
+Was a navy card logo and a green gradient square. Now a Fredoka logo (rover-orange with a cream top, darker outline, highlight streak, floating) with crates under it. The rover idles on a little moon hill with crates on the back; its headlight eyes look around and blink, and a slime peeks out from behind a rock. The Earth and stars are behind. Big green PLAY with an idle pulse; settings and sound buttons in the corners.
+
+| Before | After |
+|---|---|
+| ![before](docs/ui-review/before/desktop-01-title.jpg) | ![after](docs/ui-review/after/desktop-01-title.jpg) |
+
+### Daily reward
+
+A cargo-crate panel (planks, metal corner brackets, nails) with seven cream metal day plates; today is green and bobs. The claim button bursts coins.
+
+| Before | After |
+|---|---|
+| ![before](docs/ui-review/before/desktop-02-daily.jpg) | ![after](docs/ui-review/after/desktop-02-daily.jpg) |
+
+### Route map (Moon)
+
+A tire-track route across the moon surface. Delivery stops are round metal pads with a number, 0–3 crate stars and a lock; the current stop is orange and pulses with the rover parked above it. The top bar has hardware buttons: daily, garage, settings, sound.
+
+| Before | After |
+|---|---|
+| ![before](docs/ui-review/before/desktop-03-map.jpg) | ![after](docs/ui-review/after/desktop-03-map.jpg) |
+
+### Route map (Mars, locked)
+
+Each world is a page with its own sky, ground and planet, reached with arrows, swipe or the keyboard. A locked world shows a steel plaque with a lock.
+
+| Before | After |
+|---|---|
+| *(did not exist)* | ![after](docs/ui-review/after/desktop-03b-map-mars.jpg) |
+
+### Settings
+
+New: a metal panel with a plaque, a sound switch and a close button.
+
+| Before | After |
+|---|---|
+| *(did not exist)* | ![after](docs/ui-review/after/desktop-04-settings.jpg) |
+
+### Briefing
+
+A riveted metal panel: level plaque, crate count and distance on dark display insets, hazards as icons. The green Drive button is larger than the blue rewarded shield button (film icon + shield).
+
+| Before | After |
+|---|---|
+| ![before](docs/ui-review/before/desktop-05-pre.jpg) | ![after](docs/ui-review/after/desktop-05-pre.jpg) |
+
+### Garage
+
+The rover stands on a hydraulic lift under a spotlight in the middle, with upgrade cards around it (drawn icon, level pips, coin price). Buying plays a ding and bursts sparkles at the part, and the part changes on the rover (bumper, turbo nozzle, battery cells, exhaust, shield dish, spring thickness, tread, bed posts).
+
+| Before | After |
+|---|---|
+| ![before](docs/ui-review/before/desktop-06-garage.jpg) | ![after](docs/ui-review/after/desktop-06-garage.jpg) |
+
+### Driving, level 1
+
+Calm grey-blue sky, three parallax layers that flatten with distance, warm grey ground with a lit rim, strata bands, embedded rocks and craters. The HUD is cream hardware: battery gauge, crate icons, distance bar with flag, coins, turbo gauge, pause.
+
+| Before | After |
+|---|---|
+| ![before](docs/ui-review/before/desktop-07-drive-L1-5s.jpg) | ![after](docs/ui-review/after/desktop-07-drive-L1-5s.jpg) |
+
+### Driving, level 5
+
+Hazards in the same style: meteor warning ring, falling streak, crater that stays.
+
+| Before | After |
+|---|---|
+| ![before](docs/ui-review/before/desktop-07-drive-L5-10s.jpg) | ![after](docs/ui-review/after/desktop-07-drive-L5-10s.jpg) |
+
+### Pause
+
+A blurred, dimmed freeze of the game; the panel slides down. Big green Resume, then retry, garage and map, plus the sound switch.
+
+| Before | After |
+|---|---|
+| ![before](docs/ui-review/before/desktop-08-pause.jpg) | ![after](docs/ui-review/after/desktop-08-pause.jpg) |
+
+### Delivery complete
+
+The panel drops in with a bounce. Delivered crates pop in one by one as the stars (sound and particles), and the coin counter rolls up with ticks. Next (green, pulsing) sits beside an equal-size blue "film + x2"; retry, garage and map below.
+
+| Before | After |
+|---|---|
+| ![before](docs/ui-review/before/desktop-09b-result-win-late.jpg) | ![after](docs/ui-review/after/desktop-09b-result-win-late.jpg) |
+
+### Delivery failed
+
+The rover in a dark display tilts with dizzy spiral eyes and smoke, next to the failure reason. Retry is big, green and first; garage is second.
+
+| Before | After |
+|---|---|
+| ![before](docs/ui-review/before/desktop-11-result-fail.jpg) | ![after](docs/ui-review/after/desktop-11-result-fail.jpg) |
+
+### Battery empty
+
+The rover looks down at a blinking dead battery. A green "finish" and a blue "film + battery" recharge, the same size.
+
+| Before | After |
+|---|---|
+| ![before](docs/ui-review/before/desktop-12-recharge.jpg) | ![after](docs/ui-review/after/desktop-12-recharge.jpg) |
+
+### In-game art (Mars and Ice moon, hazards, delivery point)
+
+- **Rover:** assembled from parts on the existing colliders (hull ±1.35 x ±0.18 m drawn at 1.39 x 0.19; cab box drawn within 5%; bed posts exactly on the wall colliders; wheels r 0.42 with tread to 0.47). The headlights are eyes: they look in the driving direction, squint on hard landings, widen when a crate is about to fall, blink, and go dizzy on failure. Visible spring compression, rivets, a dent and scratches.
+- **Crates:** planks, frame, diagonal brace, nails and a stencilled icon; glass crates are blue glass with a bottle. They rattle a little when they bounce.
+- **Slimes:** lime body with a darker outline, googly eyes that lag and track the rover, wobble, blink and squash; crushed slimes leave a splat on the ground.
+- **UFO:** saucer with chasing lights, a flat tractor beam with rising rings, and a little alien pilot in the dome.
+- **Backgrounds:** Moon has rounded ridges and the Earth; Mars has a dusty orange sky, dunes and a hazy sun; the Ice moon has blue-white flat-topped cliffs and a ringed planet.
+- **Delivery point:** landing pad with chevrons and lights, a station module with windows and a dish, and a waving flag. On arrival the flag waves faster, the lights blink and confetti bursts.
+- **Particles:** dust tinted to the ground, layered turbo flame and speed lines, sparks, plank debris.
+
+| Mars | Ice moon |
+|---|---|
+| ![after](docs/ui-review/after/phone-landscape-03b-map-mars.jpg) | ![after](docs/ui-review/after/desktop-07-drive-L5-2s.jpg) |
+
+## 4. Verification
+
+- `npm run typecheck` and `npm run build:portals` pass. The portal zips are listed in the PR.
+- The Playwright audit (`audit.cjs`, all screens at 1280x720, 844x390, 640x360 and 390x844) shows no console errors. There are no layout overlaps at 640x360 (360 px phones) or on desktop; portrait shows the rotate hint.
+- Click-through with real pointer input: buying an upgrade in the garage raises its level (bumper 0 → 1) and shows the part on the rover.
+- **Performance** (headless Chromium, software rendering, level 8 with gas held):
+  - Unthrottled: 60 fps, p95 16.8 ms, about 1.2 ms of JS per frame.
+  - 4x CPU throttle at fixed full resolution: about 36 fps (old build in the same run: about 37).
+  - 4x throttle with the game's adaptive resolution (as shipped): about 50 fps (old: about 40).
+  - 60 fps at 4x throttle is not reached in this software-rendered container, before or after; it needs a check on a real mid-range phone.
+- Physics, gameplay, terrain, hazards, economy and tuning are untouched: `git diff --stat` on `src/game/world.ts`, `src/game/levels.ts` and `src/game/save.ts` is empty.
+- **Not verified:** sound by ear, safe areas on a notched phone, reduced motion on a real device.
