@@ -1,0 +1,24 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Toy Fort thumbnails</title><style>body{margin:0;background:#333}canvas{display:block;margin:8px}</style></head>
+<body><canvas id="a" width="1280" height="720"></canvas><canvas id="b" width="512" height="512"></canvas><canvas id="c" width="600" height="800"></canvas>
+<script type="module">
+import { soldier, catapult, bubble, band, hangar } from '/src/art/towers.ts';
+import { bunny, marble, bat, beetle, king } from '/src/art/enemies.ts';
+import { teddy } from '/src/art/teddy.ts';
+import { boardSvg } from '/src/art/board.ts';
+import { LEVELS } from '/src/sim/levels/data.ts';
+const load = s => new Promise(r => { const im = new Image(); im.onload = () => r(im); im.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(s); });
+const put = async (g, s, x, y, k = 1, vb) => { const im = await load(s); g.drawImage(im, x + vb[0] * k, y + vb[1] * k, im.width * k, im.height * k); };
+const TV = [-60, -132, 120, 150], EV = [-40, -64, 80, 76], KV = [-70, -120, 140, 132], DV = [-70, -170, 140, 182];
+async function scene(g, w, h, z, ox, oy) {
+  const board = await load(boardSvg(LEVELS[3])); g.save(); g.translate(ox, oy); g.scale(z, z); g.drawImage(board, 0, 0, 1280, 720);
+  await put(g, soldier(3, null), 450, 560, 1.2, TV); await put(g, catapult(4, 'crane'), 320, 300, 1.2, TV); await put(g, bubble(3, null), 700, 330, 1.2, TV); await put(g, band(4, 'slingAce'), 860, 520, 1.2, TV); await put(g, hangar(4, 'origami'), 600, 470, 1.2, TV);
+  for (let i = 0; i < 4; i++) await put(g, bunny(i % 2), 180 + i * 60, 520, 1.3, EV); await put(g, beetle(0), 520, 210, 1.4, EV); await put(g, king(0), 140, 330, 1.2, KV);
+  for (let i = 0; i < 6; i++) await put(g, marble(i % 2), 780 + i * 28, 210, 1.1, EV); await put(g, bat(1), 420, 140, 1.4, EV);
+  await put(g, teddy('happy'), 1040, 640, 1.3, DV); g.restore();
+  const v = g.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.35, w / 2, h / 2, Math.max(w, h) * 0.75); v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(40,20,10,.45)'); g.fillStyle = v; g.fillRect(0, 0, w, h);
+}
+await scene(document.getElementById('a').getContext('2d'), 1280, 720, 1, 0, 0);
+await scene(document.getElementById('b').getContext('2d'), 512, 512, 0.72, -210, -20);
+await scene(document.getElementById('c').getContext('2d'), 600, 800, 1.1, -480, -40);
+document.title = 'done';
+</script></body></html>

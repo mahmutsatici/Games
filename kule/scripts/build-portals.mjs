@@ -7,7 +7,8 @@ import { fileURLToPath } from 'node:url';
 import { deflateRawSync } from 'node:zlib';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const ALL = ['crazygames', 'poki', 'gd', 'none'];
+// itch.io uses the plain 'none' build (no SDK)
+const ALL = ['crazygames', 'poki', 'gd', 'playgama', 'none'];
 const args = process.argv.slice(2);
 const portals = args.length ? args : ALL;
 for (const p of portals) if (!ALL.includes(p)) { console.error(`Unknown portal: ${p}`); process.exit(1); }

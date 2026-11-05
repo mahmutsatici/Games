@@ -16,7 +16,7 @@ Monorepo of original, text-free HTML5 web games for web game portals. Read this 
 | `.claude/skills/` | Project skills (see below). |
 | `.mcp.json` | Project MCP server `playwright` (pinned `@playwright/mcp`). |
 | `DECISIONS.md` | Decisions already made. Add new ones here. |
-| `.github/workflows/pages.yml` | Deploys the `none` builds to GitHub Pages on push to main: ay-kargo at the site root, zip-sucuk at `/zip-sucuk/`. |
+| `.github/workflows/pages.yml` | Deploys the `none` builds to GitHub Pages on push to main: ay-kargo at the site root, zip-sucuk at `/zip-sucuk/`, kule at `/kule/`. |
 
 ## Commands (run inside a game folder, e.g. `cd ay-kargo` or `cd zip-sucuk`)
 

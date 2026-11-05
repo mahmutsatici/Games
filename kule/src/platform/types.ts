@@ -1,6 +1,6 @@
 // Platform abstraction shared by the game and every portal adapter.
 // The game ONLY talks to this interface. Adapters live in src/platform/*.ts.
-export type PortalId = 'crazygames' | 'poki' | 'gd' | 'none';
+export type PortalId = 'crazygames' | 'poki' | 'gd' | 'playgama' | 'none';
 export interface Platform {
   readonly id: PortalId;
   /** Load SDK, resolve when ready (never reject: fall back to no-ads mode). */
