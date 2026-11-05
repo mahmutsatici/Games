@@ -144,10 +144,11 @@ export function rankOptions(s: Sim, only?: TowerKind): Opt[] {
   return out.sort((a, b) => b.v - a.v);
 }
 /** play a copy forward (abilities by the same rule) and score it */
-function rollout(s: Sim, ticks: number) {
-  const c = s.clone();
-  for (let i = 0; i < ticks && c.state === 'run'; i++) { if (i % 30 === 0) useAbilities(c); c.step(); }
-  const d = c.stats.dmg; return (c.state === 'lost' ? -5000 : 0) + c.lives * 400 + (d.soldier + d.catapult + d.bubble + d.band + d.hangar + d.ability) * 0.6 + c.gold * 0.25;
+function rollout(s: Sim, ticks: number, only?: TowerKind) {
+  const c = s.clone(), policy = smartBot(only);
+  // the copy keeps playing with the heuristic bot, so saved gold gets spent the way a player would
+  for (let i = 0; i < ticks && c.state === 'run'; i++) { if (i % 30 === 0) policy.decide(c); c.step(); }
+  const d = c.stats.dmg; return (c.state === 'lost' ? -5000 : 0) + c.lives * 400 + (d.soldier + d.catapult + d.bubble + d.band + d.hangar + d.ability) * 0.6 + c.gold * 0.1;
 }
 export function lookaheadBot(only?: TowerKind, width = 3): Bot {
   let nextEval = 0;
@@ -160,9 +161,8 @@ export function lookaheadBot(only?: TowerKind, width = 3): Bot {
     const cand: Opt[] = []; for (const o of opts) { if (cand.length >= width) break; cand.push(o); }
     for (const k of only ? [] : TOWER_KINDS) { const o = opts.find(x => x.key.endsWith(k) || (x.key[0] !== 'b' && s.towers.find(t => x.key.includes(String(t.id)))?.kind === k)); if (o && !cand.includes(o)) cand.push(o); }
     const next = s.L.waves[s.wave % Math.max(1, s.L.waves.length)], horizon = Math.min(900, Math.max(450, Math.round((Math.max(0, s.countdown) + (next ? s.waveDuration(next) : 0) + 14) * 30)));
-    let best: Opt | null = null, bv = rollout(s, horizon);
-    for (const o of cand) { const c = s.clone(); if (!o.apply(c)) continue; const v = rolloutFrom(c, horizon); if (v > bv) { bv = v; best = o; } }
+    let best: Opt | null = null, bv = rollout(s, horizon, only);
+    for (const o of cand) { const c = s.clone(); if (!o.apply(c)) continue; const v = rollout(c, horizon, only); if (v > bv) { bv = v; best = o; } }
     if (best) { best.apply(s); nextEval = s.tick + 15; } else nextEval = s.tick + 90;
   } };
 }
-function rolloutFrom(c: Sim, ticks: number) { return rollout(c, ticks); }
