@@ -28,9 +28,10 @@ let starShown = 0;
 
 /** worlds = pages in level select, each with its own place */
 const WORLDS: { key: Key; theme: LevelDef['theme']; levels: number[] }[] = [
-  { key: 'worldKitchen', theme: 'counter', levels: [0, 1, 2] },
-  { key: 'worldStove', theme: 'stove', levels: [3, 4] },
-  { key: 'worldFreezer', theme: 'fridge', levels: [5] },
+  { key: 'worldKitchen', theme: 'counter', levels: [0, 1, 2, 3, 4] },
+  { key: 'worldPantry', theme: 'shelves', levels: [5, 6, 7, 8, 9] },
+  { key: 'worldStove', theme: 'stove', levels: [10, 11, 12, 13, 14] },
+  { key: 'worldFreezer', theme: 'fridge', levels: [15, 16, 17, 18, 19] },
 ];
 
 // ---------- layout + safe areas ----------
@@ -67,7 +68,9 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && sce
 addEventListener('blur', () => { if (scene === 'play') setPaused(true); });
 
 // ---------- flow ----------
-function go(s: Scene) { if (s === scene || irisBusy()) return; sfx.whoosh(); irisTo(() => { scene = s; sceneT = 0; pointerHeld = false; settingsOpen = false; }); }
+function go(s: Scene) { if (s === scene || irisBusy()) return; sfx.whoosh(); irisTo(() => { if (s === 'levels') page = currentWorld(); scene = s; sceneT = 0; pointerHeld = false; settingsOpen = false; }); }
+/** world page holding the first open, unfinished level */
+function currentWorld() { const i = LEVELS.findIndex((l, k) => levelOpen(k) && !save.stars[l.id]); return Math.max(0, WORLDS.findIndex(w => w.levels.includes(i < 0 ? LEVELS.length - 1 : i))); }
 function startMusic() { music(!isMuted() && save.music && scene !== 'loading'); }
 function setPaused(p: boolean) { if (scene !== 'play' || !sim) return; paused = p; pauseT = 0; pointerHeld = false; if (p) sfx.whoosh(); p ? platform.gameplayStop() : platform.gameplayStart(); }
 async function ad<T>(fn: () => Promise<T>): Promise<T> { adBusy = true; try { return await fn(); } finally { adBusy = false; } }
@@ -172,7 +175,7 @@ function plate(cx: number, cy: number, r: number, i: number, open: boolean, star
   const bob = current ? motion(Math.sin(now * 3) * 4) : 0;
   candy(ctx, id, cx - r, cy - r + bob, r * 2, r * 2, open ? C.cream : C.locked, () => { if (open) startLevel(i); else sfx.press(); }, (x, y) => {
     ctx.beginPath(); ctx.arc(x, y + 2, r * 0.66, 0, 7); ctx.fillStyle = open ? '#ffffff' : shade(C.locked.dark, 0.25); ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = open ? C.cream.dark : C.locked.dark; ctx.stroke();
-    if (open) label(ctx, LEVELS[i].id, x, y + 4, r * 0.72, { fill: C.sausage.base, stroke: C.sausage.dark, strokeW: 6 }); else ic('lock', x, y + 2, r * 0.8);
+    if (open) label(ctx, i + 1, x, y + 4, r * 0.72, { fill: C.sausage.base, stroke: C.sausage.dark, strokeW: 6 }); else ic('lock', x, y + 2, r * 0.8);
   }, { radius: r, pulse: current });
   if (open) stars3(cx, cy + r + 30, stars, 34);
 }
@@ -191,13 +194,13 @@ function drawLevels(dt: number) {
   ribbon(ctx, W / 2, 130, 420, t(wd.key), 46);
   // a cutting board "map" with plates along a sausage-string path
   boardPanel(ctx, 150, 200, 980, 410, { handle: true });
-  const n = wd.levels.length, pos = wd.levels.map((_, k) => ({ x: W / 2 + (k - (n - 1) / 2) * 300, y: 390 + (k % 2 ? -46 : 30) }));
+  const n = wd.levels.length, pos = wd.levels.map((_, k) => ({ x: W / 2 + (k - (n - 1) / 2) * 190, y: 385 + (k % 2 ? -50 : 30) }));
   ctx.strokeStyle = '#efe0bf'; ctx.lineWidth = 6; ctx.setLineDash([4, 14]); ctx.lineCap = 'round'; ctx.beginPath(); pos.forEach((p, k) => k ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke(); ctx.setLineDash([]);
   let cur = -1; wd.levels.forEach(i => { if (levelOpen(i) && !save.stars[LEVELS[i].id] && cur < 0) cur = i; });
   wd.levels.forEach((i, k) => { const p = pos[k], open = levelOpen(i); const pk = intro(sceneT, 0.08 * k, 0.45);
     ctx.save(); ctx.translate(p.x, p.y); ctx.scale(pk, pk); ctx.translate(-p.x, -p.y);
-    plate(p.x, p.y, 70, i, open, save.stars[LEVELS[i].id] || 0, i === cur, 'lv' + i); ctx.restore();
-    if (i === cur) puppet(p.x + 72, p.y - 40, 70, save.skin, i, false, { x: -0.6, y: 0.2 }); });
+    plate(p.x, p.y, 60, i, open, save.stars[LEVELS[i].id] || 0, i === cur, 'lv' + i); ctx.restore();
+    if (i === cur) puppet(p.x + 62, p.y - 34, 60, save.skin, i, false, { x: -0.6, y: 0.2 }); });
   ctx.restore();
   // page arrows + dots
   if (page > 0) iconBtn('pgL', 40 + safe.l, 360, 76, C.secondary, 'arrowL', () => turnPage(-1));
@@ -238,7 +241,7 @@ function drawPlay(dt: number) {
   if (s.coinsRun !== lastCoins) { coinPopT = 1; lastCoins = s.coinsRun; } coinPopT = Math.max(0, coinPopT - dt * 4);
   // HUD (top-left: level, jumps, coins; top-right: retry, pause)
   const x0 = 16 + safe.l, y0 = 14 + safe.t;
-  hudChip(x0, y0, 120, 'flag', String(LEVELS[levelIdx].id), C.sausage);
+  hudChip(x0, y0, 120, 'flag', String(levelIdx + 1), C.sausage);
   hudChip(x0 + 132, y0, 160, 'jump', `${s.jumps}/${s.L.par}`, s.jumps <= s.L.par ? C.go : C.chili);
   hudChip(x0 + 304, y0, 140, 'coin', String(s.coinsRun), C.mustard, coinPopT);
   if (!paused) { iconBtn('retry', W - 160 - safe.r, y0, 64, C.secondary, 'retry', () => restart()); iconBtn('pause', W - 84 - safe.r, y0, 64, C.primary, 'pause', () => setPaused(true)); }
@@ -275,7 +278,7 @@ function drawResult(dt: number) {
   const s = sim!; drawWorld(ctx, s, cam, now, dt); dim(0.35);
   const k = intro(sceneT, 0, 0.55), y = -560 + 640 * k;
   boardPanel(ctx, W / 2 - 360, y, 720, 560, { handle: true });
-  ribbon(ctx, W / 2, y + 26, 380, `${t('level')} ${LEVELS[levelIdx].id}`, 40);
+  ribbon(ctx, W / 2, y + 26, 380, `${t('level')} ${levelIdx + 1}`, 40);
   // stars pop in one by one with sound and particles
   const due = Math.min(s.stars, Math.floor(Math.max(0, sceneT - 0.45) / 0.35) + (sceneT > 0.45 ? 1 : 0));
   while (starShown < due) { starShown++; sfx.star(starShown); burst(W / 2 + (starShown - 2) * 92, y + 140, 18, [C.chili.base, C.mustard.base, C.cream.light]); }
@@ -343,7 +346,7 @@ function frame(ts: number) {
     w.render_game_to_text = () => {
       const s = sim; if (scene !== 'play' && scene !== 'result' || !s) return JSON.stringify({ coords: 'world metres, x right, y up', mode: scene });
       const c = s.center, v = s.velocity;
-      return JSON.stringify({ coords: 'world metres, x right, y up', mode: s.state === 'win' ? 'win' : paused ? 'paused' : 'playing', level: LEVELS[levelIdx].id,
+      return JSON.stringify({ coords: 'world metres, x right, y up', mode: s.state === 'win' ? 'win' : paused ? 'paused' : 'playing', level: levelIdx + 1, id: LEVELS[levelIdx].id,
         sucuk: { x: +c.x.toFixed(2), y: +c.y.toFixed(2), vx: +v.x.toFixed(2), vy: +v.y.toFixed(2), standing: !!s.stuck, lean: +s.swayLean.toFixed(2), charging: s.charging, power: +s.power.toFixed(2) },
         jumps: s.jumps, par: s.L.par, falls: s.falls, coins: s.coinsRun, checkpoint: s.checkpoint, finish: s.L.finish, coinsLeft: s.coins.filter(k => !k.taken).length });
     };
