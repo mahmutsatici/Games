@@ -42,4 +42,125 @@ In-game (L1 counter, L2 shelves, L4 stove, L6 fridge):
 
 ## 3. Before / after
 
-Filled in after the redesign (see section 4).
+Screenshots: `docs/ui-review/before/` and `docs/ui-review/after/`, same file names. Viewports: `desktop` 1280x720, `phone-landscape` 844x390, `small-landscape` 640x360 (360 px phones), `phone-portrait` 390x844 (shows the rotate hint by design).
+
+### Loading
+
+Was a dark empty page. Now a cream kitchen-tile screen with the sausage icon and a sausage-shaped bar that fills as the bundled fonts load.
+
+| Before | After |
+|---|---|
+| ![before](docs/ui-review/before/desktop-0-loading.jpg) | ![after](docs/ui-review/after/desktop-0-loading.jpg) |
+
+### Title
+
+Was a red banner with system text. Now an Erica One logo (dark-red outline, mustard top half, gloss line) that bounces; the hero sausage idles on a board (wobbles, blinks, flips every few seconds); the demo level plays blurred and dimmed behind it; big orange Play button that pulses; settings and sound buttons in the corners.
+
+| Before | After |
+|---|---|
+| ![before](docs/ui-review/before/desktop-1-title.jpg) | ![after](docs/ui-review/after/desktop-1-title.jpg) |
+
+### Level select
+
+Was a navy grid. Now one page per world (Kitchen, Hot Stove, Freezer) with its own blurred backdrop, plates on a cutting board joined by a dotted path, a number, 0–3 chili stars and a lock per plate; the sausage waits at the current level. Arrows, swipe and page dots.
+
+| Before | After |
+|---|---|
+| ![before](docs/ui-review/before/desktop-2-levels.jpg) | ![after](docs/ui-review/after/desktop-2-levels.jpg) |
+
+### Settings
+
+Did not exist. Board panel with ribbon title, sound and music toggles, close button.
+
+| Before | After |
+|---|---|
+| *(screen did not exist)* | ![after](docs/ui-review/after/desktop-3-settings.jpg) |
+
+### Skins
+
+Was navy cards. Now wooden frames with tiled insets and the real in-game sausage (same drawing code) as the preview; equipped = green check, buyable = orange price, too expensive = grey.
+
+| Before | After |
+|---|---|
+| ![before](docs/ui-review/before/desktop-4-skins.jpg) | ![after](docs/ui-review/after/desktop-4-skins.jpg) |
+
+### HUD + world (L1 counter)
+
+Cream outlined chips for flag/level, jumps vs par (green if within par) and coins (pops when a coin is taken); retry and pause candy buttons top-right inside the safe area. New kitchen backdrop with parallax props, vignette and warm light; counters are cabinets with a worktop slab.
+
+| Before | After |
+|---|---|
+| ![before](docs/ui-review/before/desktop-5-play-L1.jpg) | ![after](docs/ui-review/after/desktop-5-play-L1.jpg) |
+
+### Charging
+
+Charge meter is a sausage that fills up.
+
+| Before | After |
+|---|---|
+| ![before](docs/ui-review/before/desktop-6-play-charging.jpg) | ![after](docs/ui-review/after/desktop-6-play-charging.jpg) |
+
+### Pause
+
+World blurred and dimmed; board panel slides in from the top; big green Resume, retry, home, sound toggle (rewarded skip appears after 5 falls, purple with clapper).
+
+| Before | After |
+|---|---|
+| ![before](docs/ui-review/before/desktop-7-pause.jpg) | ![after](docs/ui-review/after/desktop-7-pause.jpg) |
+
+### Fall reaction
+
+Was nothing. Now a mustard comic burst with a dizzy sausage and a splash icon.
+
+| Before | After |
+|---|---|
+| ![before](docs/ui-review/before/desktop-8-fall.jpg) | ![after](docs/ui-review/after/desktop-8-fall.jpg) |
+
+### World: pantry (L2)
+
+Pantry wall with jars, onion strings and sacks; wooden shelves.
+
+| Before | After |
+|---|---|
+| ![before](docs/ui-review/before/desktop-9-play-L2-shelves.jpg) | ![after](docs/ui-review/after/desktop-9-play-L2-shelves.jpg) |
+
+### World: hot stove (L4)
+
+Dark tiles, range hood with lamps, pans, heat haze; steel counters, grill bars glow with warning stripes.
+
+| Before | After |
+|---|---|
+| ![before](docs/ui-review/before/desktop-9-play-L4-stove.jpg) | ![after](docs/ui-review/after/desktop-9-play-L4-stove.jpg) |
+
+### World: freezer (L6)
+
+Icy ribbed walls, frosted glass shelves with icicles, frozen counters, mist and sparkles.
+
+| Before | After |
+|---|---|
+| ![before](docs/ui-review/before/desktop-9-play-L6-fridge.jpg) | ![after](docs/ui-review/after/desktop-9-play-L6-fridge.jpg) |
+
+### Level complete
+
+Panel drops in with easeOutBack, chili stars pop one by one with sound and particles, coins roll up with ticks; big green Next (pulses) and an equal-size purple x2 rewarded button with clapper; small retry and home.
+
+| Before | After |
+|---|---|
+| ![before](docs/ui-review/before/desktop-b-result.jpg) | ![after](docs/ui-review/after/desktop-b-result.jpg) |
+
+### Portrait phones
+
+Before: dark page with a thin white phone outline. After: cream kitchen tiles, a phone holding the sausage that rotates, Erica One text.
+
+| Before | After |
+|---|---|
+| ![before](docs/ui-review/before/phone-portrait-1-title.jpg) | ![after](docs/ui-review/after/phone-portrait-1-title.jpg) |
+
+## 4. Verification
+
+- Typecheck clean; `npm run test:levels` solves all 6 levels with the same results as before the redesign (physics untouched).
+- Click-through with real pointer input in Chromium: title → Play → plate 1 → pause → resume → finish → result → Next starts level 2. No console errors on any screen at all four viewports.
+- Frame time while playing L1: median 16.7 ms, p95 16.8 ms (headless Chromium, 60 Hz cap).
+- Portal zips 159 KB each (fonts included). No external requests except the selected portal SDK.
+- Platform art is drawn from the collider `w x h`; the only overhang is the counter worktop (+6 px, <2%).
+- Not verified: real phone touch / safe areas on a notched device; sound by ear.

@@ -39,6 +39,15 @@ Status from browser checks (Playwright via the game-qa skill) and the headless l
 - [ ] not verified: Touch play on a real phone; rotate hint in portrait
 - [x] verified: 60 fps unthrottled in headless Chromium (avg 16.8 ms per frame)
 
+## UI / art redesign (`src/ui/`, `src/game/render.ts`, `src/game/backdrop.ts`, `src/main.ts`)
+
+- [x] verified: Theme tokens + bundled fonts (Erica One, Outfit; local files, no network)
+- [x] verified: Candy buttons with press state and sounds; SVG icon set (26 icons), no emoji
+- [x] verified: Loading bar, title, world-paged level select, settings, skins, pause, result with star/coin sequence, fall reaction, HUD with safe areas, iris transitions
+- [x] verified: Per-world backdrops (kitchen, pantry, stove, freezer) with vignette; platforms drawn as objects matching collider size
+- [x] verified: Click-through flow with real pointer input; 60 fps; no console errors at 1280x720, 844x390, 640x360
+- [ ] not verified: Safe-area insets on a notched phone; reduced-motion on a real device
+
 ## Known follow-ups
 
 - Translations exist for 8 languages (`src/i18n.ts`); check them on screen.
