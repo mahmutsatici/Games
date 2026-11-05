@@ -134,8 +134,14 @@ function logo(cx: number, cy: number) {
 function drawTitle(dt: number) {
   room(); void dt;
   // bed with hanging blanket (top-left), dust bunnies peeking from under it, night light glow
-  ctx.fillStyle = '#3c4a6e'; rr(ctx, -40, 120, 470, 230, 30); ctx.fill(); ctx.fillStyle = '#7b8fc4'; ctx.beginPath(); ctx.moveTo(-40, 300); ctx.bezierCurveTo(120, 360, 260, 300, 430, 330); ctx.lineTo(430, 360); ctx.lineTo(-40, 360); ctx.fill();
-  ctx.fillStyle = '#20263a'; ctx.fillRect(-40, 360, 470, 30);
+  // bed: wooden frame + mattress + pillow + hanging blanket, dark gap under it
+  contact(ctx, -40, 150, 470, 230, 24);
+  ctx.fillStyle = '#8a5a2e'; rr(ctx, -40, 120, 470, 250, 24); ctx.fill(); ctx.fillStyle = '#b8804a'; rr(ctx, -40, 120, 470, 236, 24); ctx.fill();
+  ctx.fillStyle = '#e9e3d6'; rr(ctx, -20, 132, 430, 70, 18); ctx.fill(); ctx.fillStyle = '#fbf6ea'; rr(ctx, 300, 140, 100, 52, 22); ctx.fill();
+  ctx.fillStyle = '#3c4a6e'; rr(ctx, -20, 180, 400, 140, 20); ctx.fill(); ctx.fillStyle = '#4e5f8c'; rr(ctx, -20, 180, 400, 40, 20); ctx.fill();
+  ctx.fillStyle = '#7b8fc4'; ctx.beginPath(); ctx.moveTo(-40, 300); ctx.bezierCurveTo(100, 352, 250, 304, 400, 336); ctx.lineTo(400, 362); ctx.lineTo(-40, 362); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 2; ctx.setLineDash([6, 6]); ctx.beginPath(); ctx.moveTo(-20, 316); ctx.bezierCurveTo(110, 360, 250, 318, 390, 346); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = '#20263a'; ctx.fillRect(-40, 362, 470, 30); ctx.fillStyle = '#8a5a2e'; ctx.fillRect(400, 300, 30, 92);
   for (let i = 0; i < 3; i++) { const pk = clamp01(Math.sin(now * 0.9 + i * 2.1) * 1.5 + 0.2) * motion(1) + (reducedMotion ? 0.5 : 0), x = 90 + i * 120;
     ctx.save(); ctx.beginPath(); ctx.rect(x - 50, 300, 100, 92); ctx.clip(); drawSprite(ctx, `e:bunny:0`, x, 400 - pk * 34, 0.9, i % 2 === 1); ctx.restore(); }
   const glow = 0.5 + 0.2 * Math.sin(now * 2); ctx.fillStyle = `rgba(255,226,150,${0.25 * glow})`; ctx.beginPath(); ctx.arc(520, 330, 120, 0, 7); ctx.fill(); ctx.fillStyle = '#ffe6a0'; ctx.beginPath(); ctx.arc(520, 330, 26, 0, 7); ctx.fill(); ctx.fillStyle = '#cfa36b'; ctx.fillRect(508, 352, 24, 22);
