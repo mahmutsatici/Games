@@ -25,6 +25,8 @@ export interface LevelDef {
   waves: WaveDef[];
   /** per-level enemy HP multiplier (set by the calibrator; bounties are unaffected) */
   hp?: number;
+  /** per-level economy multiplier on start gold, bounties and wave bonuses (set by the calibrator) */
+  gold?: number;
   /** first appearance of an enemy kind (for the "new enemy" card) */
   intro?: EnemyKind[];
 }

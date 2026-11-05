@@ -144,7 +144,9 @@ export const LEVEL_GEN = {
   /** per-level fine tuning of the budget (index g-1), 1 = neutral */
   levelMult: Array(30).fill(1) as number[],
   /** per-level enemy HP multiplier (index g-1), written by scripts/calibrate.ts */
-  levelHp: [1.501, 1.501, 1.263, 1.338, 0.361, 0.774, 1.07, 0.715, 0.623, 0.221, 0.556, 0.432, 0.646, 0.856, 0.405, 0.763, 0.72, 0.209, 0.642, 0.343, 0.568, 0.345, 0.333, 0.478, 0.441, 0.426, 0.402, 0.295, 0.405, 0.216] as number[],
+  levelHp: Array(30).fill(1) as number[],
+  /** per-level economy multiplier (index g-1), written by scripts/calibrate.ts */
+  levelGold: [0.743, 0.759, 0.716, 0.813, 1.965, 1.116, 0.947, 1.582, 1.301, 1.566, 1.004, 1.591, 1.541, 1.122, 1.816, 1.945, 1.759, 2.072, 1.196, 2.34, 1.059, 1.329, 1.825, 1.796, 2.303, 1.845, 1.35, 1.533, 1.533, 1.704] as number[],
   /** global level at which each enemy first appears */
   unlock: { bunny: 1, marble: 2, bat: 3, beetle: 5, robot: 7, clay: 9, king: 5 } as Record<EnemyKind, number>,
   primaryShare: 0.7,

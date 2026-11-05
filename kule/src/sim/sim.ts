@@ -73,6 +73,8 @@ export class Sim {
   private grid: Enemy[][]; private gw = GRID.cols + 6; private gh = GRID.rows + 6;
   private tmp = { x: 0, y: 0, a: 0 };
   readonly g: number;
+  /** economy multiplier of this level (start gold, bounties, wave bonus) */
+  readonly econ: number;
 
   constructor(L: LevelDef, o: SimOptions = {}) {
     this.L = L; this.perks = o.perks ?? NO_PERKS; this.r = rng(o.seed ?? 1); this.recordEvents = o.events ?? true; this.endless = !!o.endless;
@@ -80,7 +82,8 @@ export class Sim {
     this.paths = L.map.paths.map(mkPath);
     this.airPaths = L.map.paths.map((p, i) => mkPath(L.map.air?.[i] ?? [p[0], p[p.length - 1]]));
     this.pads = L.map.pads.map(() => null);
-    this.gold = SCALE.startGold + SCALE.startGoldPerLevel * (this.g - 1) + this.perks.startGold + (o.extraGold ?? 0);
+    this.econ = L.gold ?? 1;
+    this.gold = (SCALE.startGold + SCALE.startGoldPerLevel * (this.g - 1)) * this.econ + this.perks.startGold + (o.extraGold ?? 0);
     this.lives = SCALE.lives + this.perks.lives;
     this.grid = Array.from({ length: this.gw * this.gh }, () => []);
   }
@@ -200,7 +203,7 @@ export class Sim {
     // bosses scale with the level only (they always come on the last wave)
     const hp = B.boss ? B.hp * Math.pow(SCALE.hpPerLevel, this.g - 1) * (this.L.hp ?? 1) : B.hp * this.hpMult(wave);
     Object.assign(e, { id: this.nextId++, alive: true, kind, air: B.air, boss: !!B.boss, size: B.size, hp, maxHp: hp, armor: Math.round(B.armor * (1 + ARMOR_PER_LEVEL * (this.g - 1))),
-      speed: B.speed * (this.L.world === 3 ? WORLD_TWIST.sandSpeed : 1) * (1 + (this.r() - 0.5) * SPEED_JITTER), bounty: Math.max(1, Math.round(B.bounty * Math.pow(SCALE.bountyPerLevel, this.g - 1))), lives: B.lives,
+      speed: B.speed * (this.L.world === 3 ? WORLD_TWIST.sandSpeed : 1) * (1 + (this.r() - 0.5) * SPEED_JITTER), bounty: Math.max(1, Math.round(B.bounty * Math.pow(SCALE.bountyPerLevel, this.g - 1) * this.econ)), lives: B.lives,
       path, d, x: 0, y: 0, a: 0, slow: 0, slowT: 0, stopT: 0, dotDps: 0, dotT: 0, lastHit: -9, drops: 0, wave, hitT: -9, bornT: this.time });
     pathAt(e.air ? this.airPaths[path] : this.paths[path], d, this.tmp); e.x = this.tmp.x; e.y = this.tmp.y; e.a = this.tmp.a;
     return e;
@@ -220,7 +223,7 @@ export class Sim {
   }
   private waveDone(i: number) {
     this.waveLeft[i]--;
-    if (this.waveLeft[i] === 0) { this.gold += SCALE.waveBonusBase + SCALE.waveBonusPerWave * (i + 1); this.stats.waveLives[i] = this.waveLivesStart[i] - this.lives; }
+    if (this.waveLeft[i] === 0) { this.gold += Math.round((SCALE.waveBonusBase + SCALE.waveBonusPerWave * (i + 1)) * this.econ); this.stats.waveLives[i] = this.waveLivesStart[i] - this.lives; }
   }
   /** remaining distance to the toy box (for first/last targeting) */
   remaining(e: Enemy) { return (e.air ? this.airPaths[e.path] : this.paths[e.path]).len - e.d; }
