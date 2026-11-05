@@ -146,4 +146,11 @@ export const sfx = {
   latch: () => { noise(0.1, 0.22, 900); tone(320, 0.12, 'sine', 0.2, -200); tone(180, 0.1, 'sine', 0.1, 220, 0.06); tone(420, 0.05, 'sine', 0.06, 200, 0.14); },
   alien: () => { tone(900, 0.09, 'sine', 0.1, 700); tone(1700, 0.1, 'sine', 0.09, -900, 0.09); tone(1000, 0.08, 'triangle', 0.06, 600, 0.2); },
   star: (i = 0) => tone(660 + i * 220, 0.3, 'triangle', 0.2),
+  // UI: physical button press/release, pop-ins, short whoosh for transitions, coin counter tick, purchase ding
+  press: () => { tone(320, 0.05, 'triangle', 0.12, -120); noise(0.03, 0.06, 1800); },
+  release: () => { tone(620, 0.06, 'triangle', 0.1, 180); },
+  pop: () => { tone(420, 0.09, 'sine', 0.18, 520); },
+  swoosh: () => { noise(0.22, 0.12, 900, 0, 'bandpass'); tone(500, 0.2, 'sine', 0.04, -260); },
+  tick: () => tone(1500, 0.03, 'square', 0.04),
+  ding: () => { tone(1047, 0.25, 'triangle', 0.16); tone(1568, 0.35, 'triangle', 0.12, 0, 0.07); },
 };
