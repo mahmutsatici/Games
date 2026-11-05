@@ -1,5 +1,5 @@
 // Headless solvability check: a beam-search bot replays jump sequences (deterministic physics) and must reach the bun on every level.
-// Run: npm run test:levels
+// Run: npm run test:levels   (only some ids: LV=7,8 npm run test:levels)
 import { Sim } from '../src/game/world';
 import { LEVELS } from '../src/game/levels';
 type Act = { lean: number; hold: number };
@@ -20,7 +20,9 @@ function play(li: number, acts: Act[]) {
   return s;
 }
 const score = (s: Sim, falls0: number) => { const f = s.L.finish, c = s.center; return s.state === 'win' ? 1e6 : -Math.hypot(f[0] - c.x, (f[1] - c.y) * 1.6) - (s.falls - falls0) * 50; };
+const only = (process.env.LV || '').split(',').filter(Boolean).map(Number);
 for (let li = 0; li < LEVELS.length; li++) {
+  if (only.length && !only.includes(LEVELS[li].id)) continue;
   // beam search: keep the 4 best action sequences each step
   let beam: { acts: Act[]; s: Sim; sc: number }[] = [{ acts: [], s: play(li, []), sc: -1e9 }];
   for (let step = 0; step < 16 && !beam.some(b => b.s.state === 'win'); step++) {
@@ -30,5 +32,5 @@ for (let li = 0; li < LEVELS.length; li++) {
   }
   const s = beam[0].s;
   const c = s.center;
-  console.log(`level ${li + 1}: ${s.state === 'win' ? 'SOLVED' : 'not solved'} in ${s.jumps} jumps (par ${s.L.par}), falls ${s.falls}, coins ${s.coinsRun}/${s.L.coins.length}, end at (${c.x.toFixed(1)}, ${c.y.toFixed(1)}) finish (${s.L.finish})`);
+  console.log(`level ${li + 1} (id ${LEVELS[li].id}): ${s.state === 'win' ? 'SOLVED' : 'not solved'} in ${s.jumps} jumps (par ${s.L.par}), falls ${s.falls}, coins ${s.coinsRun}/${s.L.coins.length}, end at (${c.x.toFixed(1)}, ${c.y.toFixed(1)}) finish (${s.L.finish})`);
 }

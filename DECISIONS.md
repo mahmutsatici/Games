@@ -43,9 +43,13 @@ Decisions already made for this repo. Add new ones at the end with a date and a 
 25. **No fail screen:** the game has no fail state, so a fall shows a short comic reaction instead of a "level failed" panel.
 26. **Redesign is render-only:** `world.ts`, `levels.ts` and `config.ts` are unchanged; level solver results are identical before and after.
 
-### Moon Cargo UI and art redesign (2026-11-05)
+### Sucuk Hop: 20 levels (2026-11-05)
 
-(Numbered from 30 so they don't clash with 27–29 from the open zip-sucuk levels PR.)
+27. **20 levels in 4 worlds of 5**, grouped by place: Kitchen (counter), Pantry (shelves), Hot Stove, Freezer. `LEVELS` is built from `ORDER` (ids in play order); ids never change, so saved stars stay with their level. Menus show the position (1–20), not the id.
+28. **Unlocking follows play order:** a level is open if the level before it in `ORDER` has stars, or it has stars itself (keeps old saves working after the reorder).
+29. **The solver bot sets par:** par = the bot's jump count + 1–2. Tall sticky walls next to a jump target trap the sausage, so climbs reuse proven spacings (about 2.8 m up, 1–2 m sideways).
+
+### Moon Cargo UI and art redesign (2026-11-05)
 
 30. **ay-kargo is unfrozen** for the redesign the owner asked for. The redesign is render-only: `world.ts`, `levels.ts` and `save.ts` (physics, terrain generation, hazard logic, economy, tuning) are unchanged.
 31. **Art direction: soft cartoon space diorama.** Calm, desaturated backgrounds; the rover, crates, slimes, coins, meteors and UFO are saturated and outlined in a darker shade of their own colour (never black). Flat base, one shadow shape, one highlight. Palettes per world live in `ay-kargo/src/art/palette.ts`; the old `WORLDS` colours in `levels.ts` are no longer used for drawing.
