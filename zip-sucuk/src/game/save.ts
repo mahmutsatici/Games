@@ -1,5 +1,6 @@
 import type { Platform } from '../platform/types';
 import { CFG } from '../config';
+import { LEVELS } from './levels';
 
 export interface SaveData {
   v: 1; coins: number;
@@ -18,8 +19,8 @@ export function loadSave(p: Platform) {
   catch { save = fresh(); }
 }
 export function persist() { try { plat.setItem(KEY, JSON.stringify(save)); } catch { /* storage unavailable */ } }
-/** level index i (0-based) is open when the previous level (id = i) has been finished */
-export const levelOpen = (i: number) => i === 0 || (save.stars[i] || 0) > 0;
+/** level index i (0-based, play order) is open when the previous level in order was finished, or it was finished itself */
+export const levelOpen = (i: number) => i === 0 || (save.stars[LEVELS[i - 1].id] || 0) > 0 || (save.stars[LEVELS[i].id] || 0) > 0;
 export function skinDef(id = save.skin) { return CFG.skins.find(s => s.id === id) || CFG.skins[0]; }
 export function buySkin(id: string): boolean {
   const s = CFG.skins.find(k => k.id === id); if (!s || save.owned.includes(id) || save.coins < s.cost) return false;

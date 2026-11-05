@@ -42,3 +42,9 @@ Decisions already made for this repo. Add new ones at the end with a date and a 
 24. **One style system** in `zip-sucuk/src/ui/theme.ts` (colour triples, radii, easing, reduced motion) and `widgets.ts` (candy buttons, board panels, ribbons, chips, toggles, iris, UI particles). Outline = darker shade of the object's own colour, never black. Rewarded buttons are purple with a clapper icon; continue/next is green and at least as large.
 25. **No fail screen:** the game has no fail state, so a fall shows a short comic reaction instead of a "level failed" panel.
 26. **Redesign is render-only:** `world.ts`, `levels.ts` and `config.ts` are unchanged; level solver results are identical before and after.
+
+### Sucuk Hop: 20 levels (2026-11-05)
+
+27. **20 levels in 4 worlds of 5**, grouped by place: Kitchen (counter), Pantry (shelves), Hot Stove, Freezer. `LEVELS` is built from `ORDER` (ids in play order); ids never change, so saved stars stay with their level. Menus show the position (1–20), not the id.
+28. **Unlocking follows play order:** a level is open if the level before it in `ORDER` has stars, or it has stars itself (keeps old saves working after the reorder).
+29. **The solver bot sets par:** par = the bot's jump count + 1–2. Tall sticky walls next to a jump target trap the sausage, so climbs reuse proven spacings (about 2.8 m up, 1–2 m sideways).

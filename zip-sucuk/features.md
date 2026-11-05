@@ -17,7 +17,9 @@ Status from browser checks (Playwright via the game-qa skill) and the headless l
 
 ## Levels (`src/game/levels.ts`)
 
-- [x] verified: 6 levels (counter, shelves, butter & jelly, grill & moving board, spinner & knives, fridge climb), all solved by the beam-search bot in 3/6/5/3/5/8 jumps (par 4/7/6/5/7/10)
+- [x] verified: 20 levels in 4 worlds of 5 (Kitchen, Pantry, Hot Stove, Freezer); all solved by the beam-search bot (`npm run test:levels`, `LV=<ids>` to run some), par = bot jumps + 1–2
+- [x] verified: Level numbers follow play order; ids stay stable for saves (ids 1–6 = the original levels)
+- [x] verified: Finishing the last level of a world and pressing Next opens the next world's first level; level select opens on the world of the next unfinished level
 - [ ] not verified: Difficulty curve for real players
 
 ## Meta (`src/main.ts`, `src/game/save.ts`)
@@ -52,4 +54,4 @@ Status from browser checks (Playwright via the game-qa skill) and the headless l
 
 - Translations exist for 8 languages (`src/i18n.ts`); check them on screen.
 - Store thumbnails (`store/thumbnails/`) not made yet.
-- More levels; daily reward screen.
+- Daily reward screen.
