@@ -9,7 +9,7 @@ Monorepo of original, text-free HTML5 web games for web game portals. Read this 
 | `ay-kargo/` | Moon Cargo: physics driving game (Vite + TypeScript, Canvas 2D, planck.js). See `ay-kargo/README.md`, `ay-kargo/features.md`. |
 | `zip-sucuk/` | Sucuk Hop: one-button soft-body physics game (Vite + TypeScript, Canvas 2D, planck.js). Tunables in `zip-sucuk/src/config.ts`, levels in `src/game/levels.ts`. See `zip-sucuk/features.md`. |
 | `kule/` | Toy Fort (working title "Oyuncak Kalesi"): toy-diorama tower defense (Vite + TypeScript, Canvas 2D, no engine). Deterministic sim in `kule/src/sim/` (no DOM, 30 ticks/s, seeded RNG), tunables in `kule/src/sim/config.ts`, balance harness `npm run balance` → `kule/BALANCE.md`. |
-| `istasyon/` | Planned game (Canvas/DOM). Not in the repo yet; follow the same structure when it is added. |
+| `istasyon/` | Orbital station merge game: build a station, terraform a planet, then defend it from asteroid waves and a boss (Vite + TypeScript, Canvas 2D, no engine). Tunables in `istasyon/src/config.ts`, platform layer in `istasyon/src/platform/`. Not deployed to Pages. See `istasyon/features.md`, `istasyon/REVIEW.md`. |
 | `ay-kargo/src/platform/` | Platform layer: `types.ts` (the only interface the game uses) + one adapter per portal. |
 | `ay-kargo/reference/` | Approved prototype (`prototype.html`): the feel baseline for physics. |
 | `ay-kargo/store/` | Store texts and thumbnails. |
@@ -18,7 +18,7 @@ Monorepo of original, text-free HTML5 web games for web game portals. Read this 
 | `DECISIONS.md` | Decisions already made. Add new ones here. |
 | `.github/workflows/pages.yml` | Deploys the `none` builds to GitHub Pages on push to main: ay-kargo at the site root, zip-sucuk at `/zip-sucuk/`, kule at `/kule/`. |
 
-## Commands (run inside a game folder, e.g. `cd ay-kargo` or `cd zip-sucuk`)
+## Commands (run inside a game folder: `ay-kargo`, `zip-sucuk`, `kule` or `istasyon`)
 
 ```bash
 npm ci                 # install exact deps
