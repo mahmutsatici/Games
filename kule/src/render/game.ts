@@ -18,7 +18,7 @@ let coinTarget = { x: 300, y: 40 }; export function setCoinTarget(x: number, y: 
 /** called by the HUD: coins that just arrived (for the counter pop) */
 export let coinsArrived = 0; export function takeCoinsArrived() { const n = coinsArrived; coinsArrived = 0; return n; }
 
-const POOL = 400;
+const POOL = 240;
 function part(p: Omit<Part, 'max'>) { if (parts.length >= POOL) parts.shift(); parts.push({ ...p, max: p.life }); }
 const R = () => Math.random();
 export function burstAt(x: number, y: number, kind: Part['kind'], n: number, cols: string[], sp = 2.2) {
@@ -69,6 +69,7 @@ export function drawGame(ctx: CanvasRenderingContext2D, s: Sim, boardKey: string
   // depth-sorted entities
   const ents: { y: number; f: () => void }[] = [];
   for (const tw of s.towers) ents.push({ y: tw.y, f: () => drawTower(ctx, s, tw, t) });
+  aliveCount = 0; for (const e of s.enemies) if (e.alive) aliveCount++;
   for (const e of s.enemies) if (e.alive) ents.push({ y: e.y + (e.air ? 0.6 : 0), f: () => drawEnemy(ctx, s, e, t) });
   ents.sort((a, b) => a.y - b.y); for (const e of ents) e.f();
   drawProjectiles(ctx, s);
@@ -95,6 +96,14 @@ function drawTower(ctx: CanvasRenderingContext2D, s: Sim, tw: Tower, t: number) 
   if (tw.kind === 'hangar' && tw.branch === 'deskFan') { ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 2; for (let i = 0; i < 3; i++) { const a = t * 14 + i * 2.1; ctx.beginPath(); ctx.arc(x, y - 58, 20, a, a + 0.6); ctx.stroke(); } }
   ctx.restore();
 }
+/** soap bubble around slowed / trapped enemies, rendered once */
+let bubbleC: HTMLCanvasElement | null = null;
+function bubbleSprite() {
+  if (bubbleC) return bubbleC; const c = bubbleC = document.createElement('canvas'); c.width = c.height = 120; const g = c.getContext('2d')!; g.scale(2, 2);
+  g.fillStyle = 'rgba(200,235,255,.28)'; g.beginPath(); g.arc(30, 30, 26, 0, 7); g.fill(); g.strokeStyle = 'rgba(255,255,255,.7)'; g.lineWidth = 2; g.stroke();
+  g.fillStyle = 'rgba(255,255,255,.8)'; g.beginPath(); g.ellipse(21, 19, 6.5, 3.6, -0.5, 0, 7); g.fill(); return c;
+}
+let aliveCount = 0;
 function drawEnemy(ctx: CanvasRenderingContext2D, s: Sim, e: Enemy, t: number) {
   const fr = Math.floor((t * (e.air ? 8 : 5) + e.id * 0.37) % 2), flip = Math.cos(e.a) < -0.1;
   const hop = e.kind === 'bunny' || e.kind === 'clay' ? Math.abs(Math.sin(t * 6 + e.id)) * 6 * motion(1) : 0;
@@ -102,10 +111,10 @@ function drawEnemy(ctx: CanvasRenderingContext2D, s: Sim, e: Enemy, t: number) {
   if (e.air) { ctx.fillStyle = 'rgba(60,35,15,.18)'; ctx.beginPath(); ctx.ellipse(x, e.y * T + 22, 16 * scale, 6 * scale, 0, 0, 7); ctx.fill(); }
   const stuck = e.slow > 0 || e.stopT > 0;
   drawSprite(ctx, `e:${e.kind}:${fr}`, x, y, Math.min(1.35, Math.max(0.65, scale)), flip);
-  if (s.time - e.hitT < 0.08) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.35; drawSprite(ctx, `e:${e.kind}:${fr}`, x, y, Math.min(1.35, Math.max(0.65, scale)), flip); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; }
-  if (stuck) { const r = 26 * Math.max(0.8, scale); ctx.fillStyle = 'rgba(200,235,255,.28)'; ctx.beginPath(); ctx.arc(x, y - r * 0.8, r, 0, 7); ctx.fill(); ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 2; ctx.stroke(); ctx.fillStyle = 'rgba(255,255,255,.8)'; ctx.beginPath(); ctx.ellipse(x - r * 0.35, y - r * 1.2, r * 0.25, r * 0.14, -0.5, 0, 7); ctx.fill(); }
-  if (e.hp < e.maxHp) { const w = e.boss ? 90 : 34, yy = y - (e.boss ? 130 : e.air ? 70 : 58) * Math.max(0.8, Math.min(1.2, scale)); ctx.fillStyle = 'rgba(40,30,40,.55)'; ctx.beginPath(); ctx.roundRect(x - w / 2 - 2, yy - 2, w + 4, 9, 4.5); ctx.fill();
-    ctx.fillStyle = e.hp / e.maxHp > 0.4 ? '#7fd36b' : '#ff8a5c'; ctx.beginPath(); ctx.roundRect(x - w / 2, yy, w * Math.max(0, e.hp / e.maxHp), 5, 2.5); ctx.fill(); }
+  if (s.time - e.hitT < 0.08 && (e.boss || aliveCount < 40)) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.35; drawSprite(ctx, `e:${e.kind}:${fr}`, x, y, Math.min(1.35, Math.max(0.65, scale)), flip); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; }
+  if (stuck) { const k = Math.max(0.8, scale); ctx.drawImage(bubbleSprite(), x - 30 * k, y - 52 * k, 60 * k, 60 * k); }
+  if (e.hp < e.maxHp) { const w = e.boss ? 90 : 34, yy = y - (e.boss ? 130 : e.air ? 70 : 58) * Math.max(0.8, Math.min(1.2, scale)); ctx.fillStyle = 'rgba(40,30,40,.55)'; ctx.fillRect(x - w / 2 - 2, yy - 2, w + 4, 9);
+    ctx.fillStyle = e.hp / e.maxHp > 0.4 ? '#7fd36b' : '#ff8a5c'; ctx.fillRect(x - w / 2, yy, w * Math.max(0, e.hp / e.maxHp), 5); }
 }
 function drawProjectiles(ctx: CanvasRenderingContext2D, s: Sim) {
   for (const p of s.proj) {
@@ -126,7 +135,7 @@ function drawParts(ctx: CanvasRenderingContext2D, dt: number) {
     const p = parts[i]; p.life -= dt; if (p.life <= 0) { parts.splice(i, 1); continue; }
     p.x += p.vx * dt; p.y += p.vy * dt; p.z = Math.max(0, p.z + p.vz * dt); p.vz -= 9 * dt; if (p.z === 0) { p.vz = Math.abs(p.vz) * 0.4; p.vx *= 0.6; p.vy *= 0.6; } p.rot += dt * 8;
     const a = Math.min(1, p.life / p.max * 1.5), x = p.x * T, y = p.y * T, z = p.z * T, r = p.r * T;
-    ctx.globalAlpha = a * 0.25; ctx.fillStyle = '#3c230f'; ctx.beginPath(); ctx.ellipse(x, y + 4, r, r * 0.4, 0, 0, 7); ctx.fill();   // tiny shadow
+    if (parts.length < 120) { ctx.globalAlpha = a * 0.25; ctx.fillStyle = '#3c230f'; ctx.fillRect(x - r, y + 3, r * 2, r * 0.6); }   // tiny shadow (skipped when busy)
     ctx.globalAlpha = a; ctx.fillStyle = p.c;
     if (p.kind === 'puff') { const k = 1 + (1 - p.life / p.max) * 1.6; ctx.beginPath(); ctx.arc(x, y - z - r, r * k, 0, 7); ctx.fill(); }
     else if (p.kind === 'bubble') { ctx.strokeStyle = 'rgba(255,255,255,.8)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x, y - z - r * 2, r * 1.4, 0, 7); ctx.stroke(); }

@@ -18,8 +18,14 @@ export function svgToSprite(svg: string, vb: [number, number, number, number], s
   });
 }
 export const sprite = (key: string) => cache.get(key);
+const mirrors = new Map<string, HTMLCanvasElement>();
+function mirrored(key: string, sp: Sprite) { let m = mirrors.get(key); if (!m) { m = document.createElement('canvas'); m.width = sp.c.width; m.height = sp.c.height; const g = m.getContext('2d')!; g.translate(m.width, 0); g.scale(-1, 1); g.drawImage(sp.c, 0, 0); mirrors.set(key, m); } return m; }
 export function drawSprite(ctx: CanvasRenderingContext2D, key: string, x: number, y: number, s = 1, flip = false, rot = 0) {
   const sp = cache.get(key); if (!sp) return;
+  if (!rot) { // fast path: no state save/restore; mirrored sprites are cached once
+    if (!flip) { ctx.drawImage(sp.c, x + sp.ox * s, y + sp.oy * s, sp.w * s, sp.h * s); return; }
+    const m = mirrored(key, sp); ctx.drawImage(m, x - (sp.ox + sp.w) * s, y + sp.oy * s, sp.w * s, sp.h * s); return;
+  }
   ctx.save(); ctx.translate(x, y); if (rot) ctx.rotate(rot); if (flip) ctx.scale(-s, s); else if (s !== 1) ctx.scale(s, s);
   ctx.drawImage(sp.c, sp.ox, sp.oy, sp.w, sp.h); ctx.restore();
 }
