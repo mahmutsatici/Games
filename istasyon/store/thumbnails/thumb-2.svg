@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 384" width="512" height="384">
+  <defs>
+    <linearGradient id="space2" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#020617"/>
+      <stop offset="50%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#311042"/>
+    </linearGradient>
+    <linearGradient id="rocketFlames" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fef08a"/>
+      <stop offset="30%" stop-color="#f97316"/>
+      <stop offset="70%" stop-color="#ef4444"/>
+      <stop offset="100%" stop-color="#7f1d1d" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="meteorTail" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fef08a"/>
+      <stop offset="40%" stop-color="#f97316"/>
+      <stop offset="100%" stop-color="#f97316" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="meteorHead" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="40%" stop-color="#fde047"/>
+      <stop offset="100%" stop-color="#ea580c"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Sky -->
+  <rect width="512" height="384" fill="url(#space2)"/>
+
+  <!-- Crossing Meteor -->
+  <path d="M 460 30 L 220 190" stroke="url(#meteorTail)" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="220" cy="190" r="9" fill="url(#meteorHead)"/>
+
+  <!-- Station ascending with angle -->
+  <g transform="translate(256, 170) rotate(-8)">
+    <!-- Engine Flames -->
+    <polygon points="-70,95 -45,95 -57,210" fill="url(#rocketFlames)"/>
+    <polygon points="-12,95 12,95 0,240" fill="url(#rocketFlames)"/>
+    <polygon points="45,95 70,95 57,210" fill="url(#rocketFlames)"/>
+
+    <!-- Station Hull Platform -->
+    <rect x="-110" y="-80" width="220" height="175" rx="20" fill="#1e293b" stroke="#64748b" stroke-width="4"/>
+
+    <!-- Solar / Tech Wings -->
+    <rect x="-170" y="-40" width="60" height="90" rx="6" fill="#0284c7" stroke="#38bdf8" stroke-width="2" opacity="0.9"/>
+    <line x1="-170" y1="-10" x2="-110" y2="-10" stroke="#bae6fd" stroke-width="1.5"/>
+    <line x1="-170" y1="20" x2="-110" y2="20" stroke="#bae6fd" stroke-width="1.5"/>
+
+    <rect x="110" y="-40" width="60" height="90" rx="6" fill="#0284c7" stroke="#38bdf8" stroke-width="2" opacity="0.9"/>
+    <line x1="110" y1="-10" x2="170" y2="-10" stroke="#bae6fd" stroke-width="1.5"/>
+    <line x1="110" y1="20" x2="170" y2="20" stroke="#bae6fd" stroke-width="1.5"/>
+
+    <!-- High Tier Glowing Modules -->
+    <!-- Violet Crystal -->
+    <polygon points="-50,-40 -35,-20 -40,10 -60,10 -65,-20" fill="#a855f7" stroke="#d8b4fe" stroke-width="2"/>
+    <!-- Cyan Energy Core -->
+    <circle cx="0" cy="-20" r="28" fill="#06b6d4" stroke="#67e8f9" stroke-width="3"/>
+    <circle cx="0" cy="-20" r="14" fill="#ecfeff"/>
+    <!-- Gold Star Tier 20 -->
+    <polygon points="50,-40 54,-28 66,-28 56,-20 60,-8 50,-15 40,-8 44,-20 34,-28 46,-28" fill="#facc15" stroke="#fef08a" stroke-width="2"/>
+
+    <!-- Thruster Bells at bottom -->
+    <rect x="-65" y="80" width="16" height="15" rx="3" fill="#475569"/>
+    <rect x="-8" y="80" width="16" height="15" rx="3" fill="#475569"/>
+    <rect x="49" y="80" width="16" height="15" rx="3" fill="#475569"/>
+  </g>
+
+  <!-- Prestige Stars Floating -->
+  <g fill="#facc15" stroke="#fef08a" stroke-width="1.5">
+    <polygon points="70,90 73,99 82,99 75,105 78,114 70,109 62,114 65,105 58,99 67,99" transform="scale(1.2)"/>
+    <polygon points="410,130 413,138 421,138 415,143 417,151 410,146 403,151 405,143 399,138 407,138" transform="scale(0.9)"/>
+    <polygon points="370,260 373,268 381,268 375,273 377,281 370,276 363,281 365,273 359,268 367,268" transform="scale(1.4)"/>
+  </g>
+</svg>

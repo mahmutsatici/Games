@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 384" width="512" height="384">
+  <defs>
+    <linearGradient id="space" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#05060f"/>
+      <stop offset="60%" stop-color="#0b1030"/>
+      <stop offset="100%" stop-color="#1e1b4b"/>
+    </linearGradient>
+    <linearGradient id="planet" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="25%" stop-color="#1d4ed8"/>
+      <stop offset="100%" stop-color="#090d26"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#4ade80" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#4ade80" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowCyan" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#22d3ee" stop-opacity="0.7"/>
+      <stop offset="100%" stop-color="#22d3ee" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowGold" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#facc15" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#facc15" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Background Space -->
+  <rect width="512" height="384" fill="url(#space)"/>
+
+  <!-- Stars -->
+  <g fill="#ffffff" opacity="0.7">
+    <circle cx="45" cy="40" r="1.5"/>
+    <circle cx="120" cy="80" r="1"/>
+    <circle cx="210" cy="35" r="2"/>
+    <circle cx="340" cy="65" r="1.2"/>
+    <circle cx="440" cy="45" r="1.8"/>
+    <circle cx="480" cy="110" r="1"/>
+    <circle cx="70" cy="160" r="1.2"/>
+    <circle cx="160" cy="210" r="1"/>
+    <circle cx="470" cy="220" r="1.5"/>
+    <circle cx="390" cy="170" r="2.2"/>
+    <circle cx="280" cy="120" r="1"/>
+  </g>
+
+  <!-- Planet Limb -->
+  <ellipse cx="256" cy="490" rx="360" ry="170" fill="url(#planet)"/>
+  <ellipse cx="256" cy="488" rx="360" ry="170" fill="none" stroke="#67e8f9" stroke-width="3" opacity="0.5"/>
+
+  <!-- Grid Deck -->
+  <g transform="translate(106, 90)">
+    <rect x="0" y="0" width="300" height="210" rx="20" fill="#0f172a" fill-opacity="0.7" stroke="#334155" stroke-width="3"/>
+    
+    <!-- Cells -->
+    <rect x="18" y="18" width="56" height="52" rx="10" fill="#1e293b" stroke="#475569" stroke-width="1.5"/>
+    <rect x="86" y="18" width="56" height="52" rx="10" fill="#1e293b" stroke="#475569" stroke-width="1.5"/>
+    <rect x="156" y="18" width="56" height="52" rx="10" fill="#1e293b" stroke="#475569" stroke-width="1.5"/>
+    <rect x="226" y="18" width="56" height="52" rx="10" fill="#1e293b" stroke="#475569" stroke-width="1.5"/>
+
+    <rect x="18" y="79" width="56" height="52" rx="10" fill="#1e293b" stroke="#475569" stroke-width="1.5"/>
+    <rect x="86" y="79" width="56" height="52" rx="10" fill="#1e293b" stroke="#4ade80" stroke-width="2"/>
+    <rect x="156" y="79" width="56" height="52" rx="10" fill="#1e293b" stroke="#4ade80" stroke-width="2"/>
+    <rect x="226" y="79" width="56" height="52" rx="10" fill="#1e293b" stroke="#475569" stroke-width="1.5"/>
+
+    <rect x="18" y="140" width="56" height="52" rx="10" fill="#1e293b" stroke="#475569" stroke-width="1.5"/>
+    <rect x="86" y="140" width="56" height="52" rx="10" fill="#1e293b" stroke="#475569" stroke-width="1.5"/>
+    <rect x="156" y="140" width="56" height="52" rx="10" fill="#1e293b" stroke="#475569" stroke-width="1.5"/>
+    <rect x="226" y="140" width="56" height="52" rx="10" fill="#1e293b" stroke="#475569" stroke-width="1.5"/>
+
+    <!-- Module Parts -->
+    <!-- Tier 1 Circle -->
+    <circle cx="46" cy="44" r="16" fill="#94a3b8" stroke="#cbd5e1" stroke-width="2"/>
+    <!-- Tier 2 Square -->
+    <rect x="100" y="28" width="28" height="28" rx="6" fill="#64748b" stroke="#cbd5e1" stroke-width="2"/>
+    <!-- Tier 8 Hexagon Green -->
+    <polygon points="184,30 196,37 196,51 184,58 172,51 172,37" fill="#22c55e" stroke="#86efac" stroke-width="2"/>
+    <!-- Tier 11 Cyan Ring -->
+    <circle cx="254" cy="44" r="18" fill="url(#glowCyan)"/>
+    <circle cx="254" cy="44" r="14" fill="#06b6d4" stroke="#67e8f9" stroke-width="2.5"/>
+
+    <!-- Merging parts with arc glow -->
+    <circle cx="114" cy="105" r="26" fill="url(#glow)"/>
+    <polygon points="114,93 124,115 104,115" fill="#4ade80" stroke="#bbf7d0" stroke-width="2.5"/>
+
+    <circle cx="184" cy="105" r="26" fill="url(#glow)"/>
+    <polygon points="184,93 194,115 174,115" fill="#4ade80" stroke="#bbf7d0" stroke-width="2.5"/>
+
+    <!-- Merge energy beam between them -->
+    <path d="M 124 105 Q 149 92 174 105" fill="none" stroke="#86efac" stroke-width="4" stroke-dasharray="4 2"/>
+
+    <!-- Gold Star Tier 20 -->
+    <circle cx="184" cy="166" r="28" fill="url(#glowGold)"/>
+    <polygon points="184,152 188,162 199,162 190,169 194,179 184,173 174,179 178,169 169,162 180,162" fill="#facc15" stroke="#fef08a" stroke-width="2"/>
+  </g>
+
+  <!-- Flying Supply Drone -->
+  <g transform="translate(60, 48)">
+    <line x1="-16" y1="-2" x2="16" y2="-2" stroke="#64748b" stroke-width="3"/>
+    <ellipse cx="-16" cy="-6" rx="10" ry="2" fill="#94a3b8" opacity="0.6"/>
+    <ellipse cx="16" cy="-6" rx="10" ry="2" fill="#94a3b8" opacity="0.6"/>
+    <ellipse cx="0" cy="0" rx="12" ry="7" fill="#f8fafc"/>
+    <circle cx="0" cy="1" r="2.5" fill="#38bdf8"/>
+    <circle cx="0" cy="18" r="8" fill="#94a3b8" stroke="#cbd5e1" stroke-width="1.5"/>
+  </g>
+</svg>
