@@ -15,3 +15,7 @@
 *.woff2 binary
 *.zip binary
 *.pdf binary
+
+# Windows batch files need CRLF or cmd misreads labels
+*.bat text eol=crlf
+*.cmd text eol=crlf
